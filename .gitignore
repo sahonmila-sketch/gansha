@@ -1,0 +1,29 @@
+# Virtual environment
+venv/
+.virtualenvs/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment variables (contains BOT_TOKEN!)
+.env
+
+# Database
+*.db
+gacha.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
