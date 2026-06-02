@@ -124,6 +124,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .lb-av{font-size:22px;width:32px;text-align:center}
 .lb-n{font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
 .lb-s{font-size:11px;color:var(--tx2);white-space:nowrap}
+.arena-map{position:relative;width:100%;aspect-ratio:1;background:var(--sf);border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.05);margin:4px 0}
+.arena-dot{position:absolute;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;transform:translate(-50%,-50%);transition:all .4s;z-index:2}
+.arena-dot.alive{box-shadow:0 0 10px rgba(251,191,36,.3),0 0 0 2px rgba(251,191,36,.15)}
+.arena-dot.dead{opacity:.2;filter:grayscale(1)}
 </style>
 <body>
 <div class=app>
@@ -143,14 +147,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     <button class=tb-b data-p=p1>👤Профиль</button>
     <button class=tb-b data-p=p2>🎁Ящик</button>
     <button class=tb-b data-p=p3>📦Карты</button>
-    <button class=tb-b data-p=p4>⚔️Битва</button>
+    <button class=tb-b data-p=p4>🏟️Арена</button>
     <button class=tb-b data-p=p5>🏆Топ</button>
   </div>
 </div>
 <div id=ts class="ts h"></div><div id=pt class=pt></div>
 <script>
 const A=window.location.origin,RS=['common','rare','epic','legendary'];
-let tg,uid,ud={};
+let tg,uid,ud={},arenaInt=null;
 try{tg=window.Telegram.WebApp;tg.expand();tg.ready();tg.setHeaderColor('#07070f');tg.setBackgroundColor('#07070f');uid=tg.initDataUnsafe?.user?.id}catch(e){}
 const $=id=>document.getElementById(id),q=(s,p)=>p?p.querySelector(s):document.querySelector(s),qa=(s,p)=>p?[...p.querySelectorAll(s)]:[...document.querySelectorAll(s)];
 const _ri=r=>Math.min(Math.max(RS.indexOf(r),0),3);
@@ -171,8 +175,8 @@ function fm(s){const h=Math.floor(s/3600),m=Math.floor(s%3600/60);return h?h+'ч
 function r2(t){return new Promise(r=>setTimeout(r,t))}
 
 qa('.tb-b').forEach(b=>b.addEventListener('click',()=>sp(b.dataset.p)));
-function sp(n){qa('.pg').forEach(p=>p.classList.remove('on'));qa('.tb-b').forEach(b=>b.classList.remove('on'));$(n).classList.add('on');q('.tb-b[data-p="'+n+'"]').classList.add('on');lp(n)}
-async function lp(n){if(!uid)return;try{if(n==='p1')await rP();else if(n==='p2')rG();else if(n==='p3')await rC();else if(n==='p4')await rB();else if(n==='p5')await rT()}catch(e){}}
+function sp(n){qa('.pg').forEach(p=>p.classList.remove('on'));qa('.tb-b').forEach(b=>b.classList.remove('on'));$(n).classList.add('on');q('.tb-b[data-p="'+n+'"]').classList.add('on');lp(n);if(n==='p4'){if(!arenaInt)arenaInt=setInterval(()=>{if(q('.tb-b[data-p="p4"].on'))rA()},5000)}else{if(arenaInt){clearInterval(arenaInt);arenaInt=null}}}
+async function lp(n){if(!uid)return;try{if(n==='p1')await rP();else if(n==='p2')rG();else if(n==='p3')await rC();else if(n==='p4')await rA();else if(n==='p5')await rT()}catch(e){}}
 
 async function fP(){
   const p=await ap('/profile/'+uid+'?username='+encodeURIComponent(tg?.initDataUnsafe?.user?.username||''));
@@ -218,107 +222,66 @@ async function iC(id){
 }
 async function eC(id){try{const r=await ap('/set-main-card/'+uid+'/'+id,{method:'POST'});T(r.message,'s');qa('.md').forEach(m=>m.remove());rC();if(q('.tb-b[data-p="p1"].on'))rP()}catch(e){T(e.message,'e')}}
 
-async function rB(){
-  try{const s=await ap('/battle-status/'+uid);const can=s.battles_left>0||s.can_battle;
-  $('p4').innerHTML='<div class=sf style=text-align:center><div style="font-size:16px;font-weight:700;margin-bottom:2px">⚔️ Битва</div><div style="font-size:12px;color:var(--tx2);margin-bottom:6px">Сражайся с ИИ или ищи PvP!</div>'+
-  '<div style="display:flex;gap:8px;margin:6px 0">'+
-    '<button class="b b-d" style="flex:1;font-size:12px;padding:10px" onclick=sB() id=bB>🤖 Бой с ИИ</button>'+
-    '<button class="b b-g" style="flex:1;font-size:12px;padding:10px" onclick=pvpQ() id=pvpB>👥 PvP Поиск</button>'+
-  '</div>'+
-  '<div style="display:flex;justify-content:center;gap:24px;font-size:13px;margin:4px 0 6px"><span>🎯 <b>'+s.battles_left+'</b>/5</span><span>💰 Доп. <b>'+s.extra_cost+'</b></span></div>'+
-  '<div id=bR style="margin-top:8px"></div></div>'}catch(e){$('p4').innerHTML='<div class=sf><p>❌ '+e.message+'</p></div>'}
-}
+// ── Arena ──
 
-// ── PvP ──
-let pvpInt=null;
-async function pvpQ(){
-  const btn=$('pvpB'),res=$('bR');
-  if(btn){btn.disabled=true;btn.textContent='⏳ Поиск...'}
+async function rA(){
   try{
-    const r=await ap('/pvp/queue/join/'+uid,{method:'POST'});
-    if(r.challenger){
-      // Matched immediately!
-      btn.textContent='👥 PvP Поиск';btn.disabled=false;
-      showPvPResult(r,res);
-      return;
+    const s=await ap('/arena/status/'+uid);
+    const state=s.state;
+    let html='';
+    if(state==='idle'){
+      html='<div class=sf style=text-align:center><div style="font-size:48px;margin-bottom:8px">🏟️</div><div style="font-size:16px;font-weight:700">Арена</div><div style="font-size:12px;color:var(--tx2);margin-bottom:8px">Скоро открытие...</div></div>';
+      $('p4').innerHTML=html;return;
     }
-    res.innerHTML='<div style=text-align:center;padding:16px><div style="font-size:48px;margin-bottom:8px">🔍</div><div style="font-weight:700">Поиск противника...</div><div id=qSize style="font-size:12px;color:var(--tx2);margin-top:4px"></div><div id=qAnim style="margin:8px 0;font-size:24px">▪▪▪</div><button class="b b-p" style=margin-top:8px onclick=pvpLeave()>✕ Отмена</button></div>';
-    let dots=0;
-    pvpInt=setInterval(async()=>{
-      try{
-        const s=await ap('/pvp/queue/status/'+uid);
-        if(s.matched){
-          clearInterval(pvpInt);pvpInt=null;
-          showPvPResult(s.matched,res);
-          btn.textContent='👥 PvP Поиск';btn.disabled=false;
-          return;
-        }
-        if(s.in_queue){$('qSize').textContent='В очереди: '+s.queue_size+' чел.';dots=(dots+1)%4;$('qAnim').textContent='●'+'▪'.repeat(dots)+'○'.repeat(3-dots)}
-        else{clearInterval(pvpInt);pvpInt=null;btn.textContent='👥 PvP Поиск';btn.disabled=false}
-      }catch(e){clearInterval(pvpInt);pvpInt=null;btn.textContent='👥 PvP Поиск';btn.disabled=false;T('Ошибка: '+e.message,'e')}
-    },3000);
-  }catch(e){
-    if(btn){btn.disabled=false;btn.textContent='👥 PvP Поиск'}
-    res.innerHTML='<div style="color:var(--rd);padding:12px">❌ '+e.message+'</div>';
-  }
+    if(state==='waiting_join'){
+      html='<div class=sf style=text-align:center><div style="font-size:16px;font-weight:700">🏟️ Королевская битва</div><div style="font-size:12px;color:var(--tx2);margin-bottom:4px">Ожидание игроков</div><div style="font-size:28px;font-weight:900;margin:6px 0">'+s.players+'/'+s.max_players+'</div><button class="b b-d" onclick=joinArena() style="font-size:16px;padding:14px 40px">⚔️ Вступить</button><div style="font-size:11px;color:var(--tx2);margin-top:6px">Последний выживший побеждает!</div></div>';
+      $('p4').innerHTML=html;return;
+    }
+    // in_progress or waiting
+    const snap=s.snapshot||{};
+    html='<div class=sf style=text-align:center><div style="font-size:16px;font-weight:700">🏟️ Арена #'+s.arena_id+'</div><div style="font-size:12px;color:var(--tx2)">'+(state==='in_progress'?'🔴 Бой идёт!':'🟡 Ожидание')+' | Раунд '+(s.round||0)+'</div><div style="display:flex;justify-content:center;gap:16px;margin:4px 0;font-size:13px"><span>👥 <b>'+s.alive_count+'</b>/'+s.total+'</span></div></div>';
+    // Map
+    html+='<div class=sf style="padding:8px"><div class=arena-map id=arenaMap>';
+    for(const p of s.players||[]){
+      const al=p.state==='alive';const me=p.telegram_id===uid;
+      html+='<div class="arena-dot '+(al?'alive':'dead')+'" style="left:'+(p.pos_x||50)+'%;top:'+(p.pos_y||50)+'%;'+(me?'border:2px solid var(--gd)':'')+'" title="'+p.username+'">'+(p.emoji||'💀')+'</div>';
+    }
+    html+='</div></div>';
+    // Player list
+    html+='<div class=sf><div style="font-weight:700;font-size:13px;margin-bottom:4px">👥 Игроки</div>';
+    for(const p of s.players||[]){
+      const al=p.state==='alive';const me=p.telegram_id===uid;const hpPct=p.max_hp>0?(p.hp/p.max_hp*100):0;
+      html+='<div style="display:flex;align-items:center;gap:5px;padding:2px 0;font-size:12px;'+(me?'color:var(--gd)':'')+'">';
+      html+='<span>'+(p.emoji||'💀')+'</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p.username+'</span>';
+      if(al){html+='<div style="width:36px;height:5px;background:var(--sf2);border-radius:3px;overflow:hidden"><div style="width:'+hpPct+'%;height:100%;background:'+(hpPct>60?'var(--gr)':hpPct>30?'var(--or)':'var(--rd)')+';border-radius:3px"></div></div><span style="font-size:10px;color:var(--tx2)">❤️'+p.hp+'</span>'}
+      else{html+='<span style="color:var(--tx2)">💀 Устранён'+(p.elimination_round?' р.'+p.elimination_round:'')+'</span>'}
+      html+='</div>';
+    }
+    html+='</div>';
+    // Round log
+    if(snap.actions&&snap.actions.length>0){
+      html+='<div class=sf><div style="font-weight:700;font-size:13px;margin-bottom:4px">📊 Раунд '+snap.round+'</div>';
+      for(const a of snap.actions){
+        html+='<div style="display:flex;align-items:center;gap:4px;font-size:11px;padding:2px 0;border-bottom:1px solid rgba(255,255,255,.04)"><span>⚡</span><span><b>'+a.attacker_name+'</b> → <b>'+a.target_name+'</b> <span style="color:var(--rd)">-'+a.damage+'</span></span></div>';
+      }
+      if(snap.eliminated&&snap.eliminated.length>0){html+='<div style="margin:3px 0;font-size:11px;color:var(--rd)">💀 Выбыли: '+snap.eliminated.map(e=>e.username).join(', ')+'</div>'}
+      html+='</div>';
+    }
+    // Winner overlay
+    if(snap.finished||state==='finished'){
+      const w=s.winner||snap.winner||{};
+      html+='<div class=sf style=text-align:center><div style="font-size:14px;font-weight:700;color:var(--gd)">🏆 Победитель: '+w.username+'</div><div style="font-size:11px;color:var(--tx2);margin-top:2px">Новая игра начнётся скоро!</div></div>';
+    }
+    $('p4').innerHTML=html;
+  }catch(e){$('p4').innerHTML='<div class=sf style="text-align:center;padding:24px"><div style="color:var(--rd)">❌ '+e.message+'</div></div>'}
 }
 
-async function pvpLeave(){
-  if(pvpInt){clearInterval(pvpInt);pvpInt=null}
-  try{await ap('/pvp/queue/leave/'+uid,{method:'POST'})}catch(e){}
-  const btn=$('pvpB');if(btn){btn.disabled=false;btn.textContent='👥 PvP Поиск'}
-  $('bR').innerHTML='';
-}
-
-function showPvPResult(match,res){
-  const won=match.challenger_won;
-  const cName=match.challenger_username||'Игрок';
-  const tName=match.target_username||'Игрок';
-  if(tg?.HapticFeedback)tg.HapticFeedback.impactOccurred(won?'heavy':'medium');
-  if(won)Pt(3);
-  res.innerHTML='<div class=bre>'+
-    '<div style="font-size:14px;color:var(--tx2);margin-bottom:4px">⚔️ PvP Битва завершена!</div>'+
-    '<div style="display:flex;justify-content:space-around;align-items:center;padding:8px">'+
-      '<div style=text-align:center><div style="font-size:32px">'+(won?'🎉':'💀')+'</div><div style="font-size:13px;font-weight:700">'+cName+'</div></div>'+
-      '<div style="font-size:20px;font-weight:900;color:var(--rd)">VS</div>'+
-      '<div style=text-align:center><div style="font-size:32px">'+(won?'💀':'🎉')+'</div><div style="font-size:13px;font-weight:700">'+tName+'</div></div>'+
-    '</div>'+
-    '<div class=rt style="font-size:22px" class="'+(won?'c3':'c0')+'">'+(won?'🏆 ПОБЕДА!':'💀 Поражение')+'</div>'+
-    '<button class="b b-g" onclick="pvpQ()" style="margin-top:6px">👥 Ещё PvP</button>'+
-  '</div>';
-  fP();
-}
-async function sB(){
-  const btn=$('bB'),res=$('bR');if(btn){btn.disabled=true;btn.textContent='⏳...'}
-  res.innerHTML='<div class=ld><div class=spn></div></div>';
+async function joinArena(){
   try{
-    const r=await ap('/battle/'+uid,{method:'POST'});const p=r.player,e=r.enemy;const pHm=p.hp||100,eHm=e.hp||100;
-    function hc(p){return p>60?'h':p>30?'m':'l'}
-    res.innerHTML='<div class=vs id=vs><div class=vf id=pF><span class=be>'+p.emoji+'</span><div class="nm '+_id(_ri(p.rarity))+'">'+p.name+'</div><div class=lv>⭐ lv'+p.level+'</div></div><div class=vd>⚡</div><div class=vf id=eF><span class=be>'+e.emoji+'</span><div class=nm style="color:var(--tx2)">'+e.name+'</div><div class=lv>⭐ lv'+e.level+'</div></div></div><div class=hr><span>❤️</span><div class=ho><div class="hi h" id=bpB style=width:100%></div></div><span id=bpH>'+pHm+'</span></div><div class=hr style=margin-top:2px><span>❤️</span><div class=ho><div class="hi h" id=beB style=width:100%></div></div><span id=beH>'+eHm+'</span></div><div class=bl id=bL></div><div id=bF></div><div id=aA></div>';
-    const aA=$('aA');const cd=['3','2','1','⚔️ БИТВА!'];
-    for(let i=0;i<cd.length;i++){aA.innerHTML='<div class=co><div class="'+(i===3?'ctext':'cn')+'">'+cd[i]+'</div></div>';await r2(i===3?900:700)}aA.innerHTML='';
-    const pEm=$('pF').querySelector('.be'),eEm=$('eF').querySelector('.be');
-    let pHp=pHm,eHp=eHm;const turns=r.turns;const log=$('bL');
-    for(let i=0;i<turns.length;i++){
-      const t=turns[i],isP=t.attacker_is_player,dmg=t.damage,crit=t.crit;
-      aA.innerHTML='<div class=ta>— Раунд '+t.turn+' —</div>';
-      if(isP){pHp=t.attacker_hp_left;eHp=t.defender_hp_left;pEm.style.transform='translateX(24px) scale(1.15)';eEm.style.transform='translateX(-8px)'}
-      else{pHp=t.defender_hp_left;eHp=t.attacker_hp_left;eEm.style.transform='translateX(-24px) scale(1.15)';pEm.style.transform='translateX(8px)'}
-      await r2(260);
-      const dp=isP?eHp/eHm*100:pHp/pHm*100;
-      if(isP){$('beH').textContent=eHp;const eb=$('beB');eb.style.width=dp+'%';eb.className='hi '+hc(dp);eb.classList.add('sh');setTimeout(()=>eb.classList.remove('sh'),300);eEm.style.transform=''}
-      else{$('bpH').textContent=pHp;const pb=$('bpB');pb.style.width=dp+'%';pb.className='hi '+hc(dp);pb.classList.add('sh');setTimeout(()=>pb.classList.remove('sh'),300);pEm.style.transform=''}
-      const pop=document.createElement('div');pop.className='dp '+(crit?'dc':'dn');pop.textContent='-'+dmg;pop.style.left=(20+Math.random()*60)+'%';pop.style.top='30%';res.appendChild(pop);setTimeout(()=>pop.remove(),1000);
-      log.innerHTML+='<div class="bi '+(crit?'c':'n')+'"><span>'+(isP?p.emoji:e.emoji)+'</span><span>'+(crit?'💥':'⚡')+' <b>-'+dmg+'</b></span><span style="margin-left:auto;font-size:11px;color:var(--tx2)">❤️ '+(isP?eHp:pHp)+'</span></div>';log.scrollTop=log.scrollHeight;
-      if(crit){aA.innerHTML='<div class=ta style="color:var(--gd);font-size:18px">💥 КРИТИЧЕСКИЙ УДАР!</div>';res.classList.add('cf');setTimeout(()=>res.classList.remove('cf'),500);if(tg?.HapticFeedback)tg.HapticFeedback.impactOccurred('heavy')}
-      await r2(crit?700:450);
-    }
-    aA.innerHTML='';const won=r.player_won;await r2(400);
-    if(tg?.HapticFeedback)tg.HapticFeedback.impactOccurred(won?'heavy':'medium');if(won)Pt(3);
-    $('bF').innerHTML='<div class=bre><div class="rt '+(won?'c3':'c0')+'">'+(won?'🎉 ПОБЕДА!':'💀 ПОРАЖЕНИЕ')+'</div><div class=rw>'+(r.rewards.boxes?'<span>🎁 +'+r.rewards.boxes+'</span>':'')+(r.rewards.coins?'<span>💰 +'+r.rewards.coins+'</span>':'')+(r.rewards.trophies?'<span>🏆 +'+r.rewards.trophies+'</span>':'')+'</div>'+(r.new_level>ud.level?'<div class=nlv>⭐ НОВЫЙ УРОВЕНЬ: '+r.new_level+'!</div>':'')+'<button class="b b-d" onclick=sB() style="margin-top:6px">⚔️ Ещё битву!</button>'+(r.used_extra?'<div style="font-size:11px;color:var(--tx2);margin-top:4px">💰 Дополнительная битва</div>':'')+'</div>';
-    fP();
-  }catch(e){res.innerHTML='<div style="text-align:center;color:var(--rd);padding:16px">❌ '+e.message+'</div>'}
-  if(btn){btn.disabled=false;btn.textContent='⚔️ Начать битву!'}
+    const r=await ap('/arena/join/'+uid,{method:'POST'});
+    T('✅ Вы на арене!','s');rA();
+    if(r.players>=r.max_players)T('🔴 Бой начинается!','s');
+  }catch(e){T('❌ '+e.message,'e')}
 }
 
 async function rT(){

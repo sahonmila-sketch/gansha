@@ -9,9 +9,11 @@ from pathlib import Path
 from database import Database
 from config import API_HOST, API_PORT, WEBAPP_URL, RARITIES, STARS_PACKAGES
 from characters import CHARACTERS as ALL_CHARS
+from arena import ArenaManager
 
 app = FastAPI(title="Gacha Battle API")
 db = Database()
+arena_manager = None
 
 app.add_middleware(
     CORSMiddleware,
@@ -250,6 +252,32 @@ async def get_progress(telegram_id: int):
     if not result:
         raise HTTPException(status_code=400, detail="Пользователь не найден")
     return result
+
+
+# ── Arena ──
+
+@app.post("/arena/join/{telegram_id}")
+async def arena_join(telegram_id: int):
+    if not arena_manager:
+        raise HTTPException(status_code=503, detail="Арена не активна")
+    result, error = await arena_manager.join(telegram_id)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+    return result
+
+
+@app.get("/arena/status/{telegram_id}")
+async def arena_status(telegram_id: int):
+    if not arena_manager:
+        return {"state": "idle"}
+    return await arena_manager.get_status(telegram_id)
+
+
+@app.get("/arena/list")
+async def arena_list():
+    if not arena_manager:
+        return {"has_open": False, "players": 0, "max_players": 10}
+    return await arena_manager.get_open_arena_info()
 
 
 def run_api():

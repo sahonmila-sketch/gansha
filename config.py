@@ -59,3 +59,10 @@ MISSION_TYPES = [
 
 # Level thresholds (cumulative trophies needed)
 LEVEL_THRESHOLDS = [0, 30, 70, 130, 210, 320, 460, 630, 840, 1100, 1500]
+
+# Arena (Battle Royale)
+ARENA_SIZE = 10
+ARENA_CYCLE_MINUTES = 5
+ARENA_WIN_TROPHIES = 50
+ARENA_WIN_COINS = 100
+ARENA_LOSE_COINS = 10

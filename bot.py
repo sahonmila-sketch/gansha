@@ -10,14 +10,16 @@ from aiogram.types import (
 )
 from aiogram.enums.parse_mode import ParseMode
 
-from config import BOT_TOKEN, WEBAPP_URL, CURRENCY_NAME, BOX_PRICE, STARS_PACKAGES
+from config import BOT_TOKEN, WEBAPP_URL, CURRENCY_NAME, BOX_PRICE, STARS_PACKAGES, ARENA_SIZE, ARENA_WIN_TROPHIES, ARENA_WIN_COINS, ARENA_LOSE_COINS
 from database import Database
+from arena import ArenaManager
 
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 db = Database()
+arena_manager = None
 
 
 # ─── Keyboards ───
@@ -191,6 +193,59 @@ async def cmd_kit(message: types.Message):
     await message.answer(text, parse_mode=ParseMode.HTML, reply_markup=main_keyboard())
 
 
+@dp.message(Command("arena"))
+async def cmd_arena(message: types.Message):
+    if not arena_manager:
+        await message.answer("❌ Арена временно недоступна")
+        return
+    status = await arena_manager.get_status(message.from_user.id)
+    if status["state"] == "idle" or status["state"] == "waiting_join":
+        open_info = await arena_manager.get_open_arena_info()
+        text = (
+            f"🏟️ <b>Арена (Battle Royale)</b>\n\n"
+            f"Сразитесь с {ARENA_SIZE} игроками в битве на выживание!\n"
+            f"Последний выживший получает награду.\n\n"
+            f"👥 Игроков в очереди: <b>{open_info['players']}</b>/{ARENA_SIZE}\n"
+            f"🏆 Награда победителю: <b>+{ARENA_WIN_TROPHIES} трофеев, +{ARENA_WIN_COINS} монет</b>\n"
+            f"💰 Утешительный приз: <b>+{ARENA_LOSE_COINS} монет</b>\n\n"
+            f"Нажми кнопку ниже!"
+        )
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="⚔️ Вступить на арену", web_app=types.WebAppInfo(url=WEBAPP_URL))],
+            [InlineKeyboardButton(text="🔄 Статус", callback_data="arena_status")],
+        ])
+        await message.answer(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+    elif status["state"] == "in_progress" or status["state"] == "waiting":
+        text = (
+            f"🏟️ <b>Арена #{status['arena_id']}</b>\n\n"
+            f"⚔️ Статус: {'🔴 Битва идёт!' if status['state'] == 'in_progress' else '🟡 Ожидание игроков'}\n"
+            f"👥 Игроков: <b>{status['alive_count']}</b>/{status['total']}\n"
+            f"📊 Раунд: <b>{status.get('round', 0)}</b>\n"
+        )
+        my = next((p for p in status.get("players", []) if p["telegram_id"] == message.from_user.id), None)
+        if my:
+            text += f"\n❤️ Ваше HP: <b>{my['hp']}</b>/{my['max_hp']}\n"
+            text += f"📌 Ваш статус: <b>{'Жив' if my['state'] == 'alive' else 'Устранён'}</b>"
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🏟️ Открыть арену", web_app=types.WebAppInfo(url=WEBAPP_URL))],
+        ])
+        await message.answer(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+    elif status["state"] == "finished":
+        snap = status.get("snapshot", {})
+        winner = snap.get("winner", {})
+        text = (
+            f"🏟️ <b>Арена завершена!</b>\n\n"
+            f"🏆 Победитель: <b>{winner.get('username', '?')}</b>\n"
+        )
+        await message.answer(text, parse_mode=ParseMode.HTML, reply_markup=main_keyboard())
+
+
+@dp.callback_query(lambda c: c.data == "arena_status")
+async def cb_arena_status(callback: types.CallbackQuery):
+    await cmd_arena(callback.message)
+    await callback.answer()
+
+
 @dp.message(Command("pvp"))
 async def cmd_pvp(message: types.Message):
     args = message.text.split()
@@ -286,6 +341,7 @@ async def main():
         BotCommand(command="kit", description="👀 Моя экипировка"),
         BotCommand(command="setmain", description="⭐ Выбрать главного"),
         BotCommand(command="pvp", description="👤 Битва с игроком"),
+        BotCommand(command="arena", description="🏟️ Battle Royale"),
     ], scope=BotCommandScopeDefault())
 
     asyncio.create_task(daily_notifier())

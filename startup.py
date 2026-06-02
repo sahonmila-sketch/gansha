@@ -15,6 +15,12 @@ async def main():
     import bot
     bot.db = db
 
+    from arena import ArenaManager
+    arena_manager = ArenaManager(db)
+    await arena_manager.start()
+    api.arena_manager = arena_manager
+    bot.arena_manager = arena_manager
+
     from bot import dp, bot as tg_bot
     polling_task = asyncio.create_task(dp.start_polling(tg_bot))
 

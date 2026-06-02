@@ -223,6 +223,29 @@ class Database:
             CREATE INDEX IF NOT EXISTS idx_pvp_battles_user ON pvp_battles(player1_id);
             CREATE INDEX IF NOT EXISTS idx_pvp_battles_user2 ON pvp_battles(player2_id);
             CREATE INDEX IF NOT EXISTS idx_pvp_actions_battle ON pvp_actions(battle_id);
+            CREATE TABLE IF NOT EXISTS arena_instances (
+                id SERIAL PRIMARY KEY,
+                state TEXT DEFAULT 'waiting',
+                round_number INTEGER DEFAULT 0,
+                winner_id INTEGER,
+                created_at TIMESTAMP DEFAULT NOW(),
+                started_at TIMESTAMP,
+                finished_at TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS arena_players (
+                id SERIAL PRIMARY KEY,
+                arena_id INTEGER NOT NULL REFERENCES arena_instances(id),
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                telegram_id BIGINT NOT NULL,
+                hp INTEGER NOT NULL,
+                max_hp INTEGER NOT NULL,
+                pos_x INTEGER DEFAULT 50,
+                pos_y INTEGER DEFAULT 50,
+                state TEXT DEFAULT 'alive',
+                elimination_round INTEGER
+            );
+            CREATE INDEX IF NOT EXISTS idx_arena_players_arena ON arena_players(arena_id);
+            CREATE INDEX IF NOT EXISTS idx_arena_players_tg ON arena_players(telegram_id);
         """)
 
     async def _create_tables(self):
@@ -331,6 +354,31 @@ class Database:
             CREATE INDEX IF NOT EXISTS idx_pvp_battles_user ON pvp_battles(player1_id);
             CREATE INDEX IF NOT EXISTS idx_pvp_battles_user2 ON pvp_battles(player2_id);
             CREATE INDEX IF NOT EXISTS idx_pvp_actions_battle ON pvp_actions(battle_id);
+            CREATE TABLE IF NOT EXISTS arena_instances (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                state TEXT DEFAULT 'waiting',
+                round_number INTEGER DEFAULT 0,
+                winner_id INTEGER,
+                created_at TEXT DEFAULT (datetime('now')),
+                started_at TEXT,
+                finished_at TEXT
+            );
+            CREATE TABLE IF NOT EXISTS arena_players (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                arena_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                telegram_id INTEGER NOT NULL,
+                hp INTEGER NOT NULL,
+                max_hp INTEGER NOT NULL,
+                pos_x INTEGER DEFAULT 50,
+                pos_y INTEGER DEFAULT 50,
+                state TEXT DEFAULT 'alive',
+                elimination_round INTEGER,
+                FOREIGN KEY(arena_id) REFERENCES arena_instances(id),
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_arena_players_arena ON arena_players(arena_id);
+            CREATE INDEX IF NOT EXISTS idx_arena_players_tg ON arena_players(telegram_id);
         """)
 
     async def _migrate(self):
@@ -364,6 +412,14 @@ class Database:
             )""")
         except aiosqlite.OperationalError:
             pass
+
+    async def execute(self, sql, params=None):
+        if params is None:
+            return await self.db.execute(sql)
+        return await self.db.execute(sql, params)
+
+    async def commit(self):
+        await self.db.commit()
 
     async def get_or_create_user(self, telegram_id: int, username: Optional[str] = None):
         cursor = await self.db.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
