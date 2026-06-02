@@ -5,10 +5,11 @@ load_dotenv()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "ВАШ_ТОКЕН_ОТ_BOTFATHER")
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
-API_PORT = int(os.getenv("API_PORT", "8000"))
+API_PORT = int(os.getenv("PORT") or os.getenv("API_PORT", "8000"))
 WEBAPP_URL = os.getenv("WEBAPP_URL", "https://your-domain.com/static/index.html")
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gacha.db")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 CURRENCY_NAME = "монет"
 DAILY_BONUS = 1

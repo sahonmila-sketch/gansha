@@ -1,10 +1,11 @@
 import aiosqlite
 import random
 import string
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from config import DB_PATH, RARITIES, DAILY_BONUS, BOX_PRICE, INITIAL_BALANCE, REFERRAL_BONUS
+from config import DB_PATH, DATABASE_URL, RARITIES, DAILY_BONUS, BOX_PRICE, INITIAL_BALANCE, REFERRAL_BONUS
 from config import BATTLES_PER_DAY, BATTLE_WIN_BOXES, BATTLE_WIN_TROPHIES, BATTLE_LOSE_COINS, BATTLE_LOSE_TROPHIES, BATTLE_EXTRA_COST, BATTLE_MAX_ROUNDS
 from config import EQUIP_SLOTS, ENEMY_RARITY_WEIGHTS, MISSIONS_PER_DAY, MISSION_TYPES, LEVEL_THRESHOLDS
 from characters import CHARACTERS, CARD_STATS_BASE, CARD_STATS_PER_LEVEL, RARITY_SPECIALS
@@ -39,15 +40,190 @@ def _battle_turn(attacker_card, atk_stat, defender_card, def_stat, defender_hp, 
         "defender_hp_left": defender_hp,
     }, defender_hp
 
+# ── PostgreSQL compatibility layer ──
+
+def _adapt_sql(sql):
+    i = 0
+    parts = re.split(r'(\?)', sql)
+    result = []
+    for part in parts:
+        if part == '?':
+            i += 1
+            result.append(f"${i}")
+        else:
+            result.append(part)
+    sql = ''.join(result)
+    sql = sql.replace("datetime('now')", "NOW()")
+    sql = sql.replace("datetime( 'now' )", "NOW()")
+    return sql
+
+
+class _PGCursor:
+    __slots__ = ('_conn', '_sql', '_params')
+    def __init__(self, conn, sql, params):
+        self._conn = conn
+        self._sql = sql
+        self._params = params
+    async def fetchone(self):
+        return await self._conn.fetchrow(self._sql, *self._params)
+    async def fetchall(self):
+        return await self._conn.fetch(self._sql, *self._params)
+
+
+class _PGConnection:
+    def __init__(self, conn):
+        self._conn = conn
+    async def execute(self, sql, params=None):
+        sql = _adapt_sql(sql)
+        if params is None:
+            params = ()
+        elif not isinstance(params, (list, tuple)):
+            params = (params,)
+        return _PGCursor(self._conn, sql, params)
+    async def executescript(self, script):
+        for stmt in script.split(';'):
+            stmt = stmt.strip()
+            if stmt and not stmt.startswith('--'):
+                try:
+                    await self._conn.execute(stmt)
+                except Exception:
+                    pass
+    async def commit(self):
+        pass
+    async def close(self):
+        await self._conn.close()
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+
+# ── Database ──
 
 class Database:
     def __init__(self):
         self.db = None
+        self._is_pg = bool(DATABASE_URL)
 
     async def connect(self):
-        self.db = await aiosqlite.connect(DB_PATH)
-        self.db.row_factory = aiosqlite.Row
-        await self._create_tables()
+        if self.db is not None:
+            return
+        if self._is_pg:
+            import asyncpg
+            conn = await asyncpg.connect(DATABASE_URL)
+            self.db = _PGConnection(conn)
+            await self._create_tables_pg()
+        else:
+            self.db = await aiosqlite.connect(DB_PATH)
+            self.db.row_factory = aiosqlite.Row
+            await self._create_tables()
+            await self._migrate()
+            await self.db.commit()
+
+    async def _create_tables_pg(self):
+        await self.db.executescript("""
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                telegram_id BIGINT UNIQUE NOT NULL,
+                username TEXT,
+                balance INTEGER DEFAULT 50,
+                boxes_opened INTEGER DEFAULT 0,
+                referral_code TEXT UNIQUE,
+                referred_by INTEGER,
+                daily_last_claim TIMESTAMP,
+                free_boxes INTEGER DEFAULT 0,
+                trophies INTEGER DEFAULT 0,
+                battles_won INTEGER DEFAULT 0,
+                battles_total INTEGER DEFAULT 0,
+                battles_reset TEXT,
+                level INTEGER DEFAULT 1,
+                main_card_id INTEGER,
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+            CREATE TABLE IF NOT EXISTS user_cards (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                card_id INTEGER NOT NULL,
+                count INTEGER DEFAULT 1,
+                obtained_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(user_id, card_id)
+            );
+            CREATE TABLE IF NOT EXISTS transactions (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                type TEXT NOT NULL,
+                amount INTEGER NOT NULL,
+                description TEXT,
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+            CREATE TABLE IF NOT EXISTS missions (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                type TEXT NOT NULL,
+                target INTEGER DEFAULT 1,
+                progress INTEGER DEFAULT 0,
+                completed INTEGER DEFAULT 0,
+                claimed INTEGER DEFAULT 0,
+                reward_type TEXT DEFAULT 'box',
+                reward_amount INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+            CREATE TABLE IF NOT EXISTS equipped (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                slot TEXT NOT NULL,
+                card_id INTEGER NOT NULL,
+                UNIQUE(user_id, slot),
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            );
+            CREATE TABLE IF NOT EXISTS user_equipment (
+                user_id INTEGER NOT NULL,
+                slot TEXT NOT NULL,
+                card_id INTEGER NOT NULL,
+                equipped_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(user_id, slot),
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            );
+            CREATE TABLE IF NOT EXISTS pvp_queue (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL UNIQUE,
+                created_at TIMESTAMP DEFAULT NOW(),
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            );
+            CREATE TABLE IF NOT EXISTS pvp_battles (
+                id SERIAL PRIMARY KEY,
+                player1_id INTEGER NOT NULL,
+                player2_id INTEGER NOT NULL,
+                player1_hp INTEGER NOT NULL,
+                player2_hp INTEGER NOT NULL,
+                player1_max_hp INTEGER NOT NULL,
+                player2_max_hp INTEGER NOT NULL,
+                current_turn INTEGER DEFAULT 1,
+                state TEXT DEFAULT 'active',
+                winner_id INTEGER,
+                turn_deadline TIMESTAMP,
+                created_at TIMESTAMP DEFAULT NOW(),
+                finished_at TIMESTAMP,
+                FOREIGN KEY(player1_id) REFERENCES users(id),
+                FOREIGN KEY(player2_id) REFERENCES users(id)
+            );
+            CREATE TABLE IF NOT EXISTS pvp_actions (
+                id SERIAL PRIMARY KEY,
+                battle_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                turn_number INTEGER NOT NULL,
+                action_type TEXT NOT NULL,
+                damage INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT NOW(),
+                FOREIGN KEY(battle_id) REFERENCES pvp_battles(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_user_cards_user ON user_cards(user_id);
+            CREATE INDEX IF NOT EXISTS idx_transactions_user ON transactions(user_id);
+            CREATE INDEX IF NOT EXISTS idx_equipment_user ON user_equipment(user_id);
+            CREATE INDEX IF NOT EXISTS idx_missions_user ON missions(user_id);
+            CREATE INDEX IF NOT EXISTS idx_pvp_queue_user ON pvp_queue(user_id);
+            CREATE INDEX IF NOT EXISTS idx_pvp_battles_user ON pvp_battles(player1_id);
+            CREATE INDEX IF NOT EXISTS idx_pvp_battles_user2 ON pvp_battles(player2_id);
+            CREATE INDEX IF NOT EXISTS idx_pvp_actions_battle ON pvp_actions(battle_id);
+        """)
 
     async def _create_tables(self):
         await self.db.executescript("""
@@ -66,6 +242,7 @@ class Database:
                 battles_total INTEGER DEFAULT 0,
                 battles_reset TEXT,
                 level INTEGER DEFAULT 1,
+                main_card_id INTEGER,
                 created_at TEXT DEFAULT (datetime('now'))
             );
             CREATE TABLE IF NOT EXISTS user_cards (
@@ -107,8 +284,6 @@ class Database:
                 UNIQUE(user_id, slot),
                 FOREIGN KEY(user_id) REFERENCES users(id)
             );
-            CREATE INDEX IF NOT EXISTS idx_user_cards_user ON user_cards(user_id);
-            CREATE INDEX IF NOT EXISTS idx_transactions_user ON transactions(user_id);
             CREATE TABLE IF NOT EXISTS user_equipment (
                 user_id INTEGER NOT NULL,
                 slot TEXT NOT NULL,
@@ -117,8 +292,8 @@ class Database:
                 UNIQUE(user_id, slot),
                 FOREIGN KEY(user_id) REFERENCES users(id)
             );
-            CREATE INDEX IF NOT EXISTS idx_equipment_user ON user_equipment(user_id);
-            CREATE INDEX IF NOT EXISTS idx_missions_user ON missions(user_id);
+            CREATE INDEX IF NOT EXISTS idx_user_cards_user ON user_cards(user_id);
+            CREATE INDEX IF NOT EXISTS idx_transactions_user ON transactions(user_id);
             CREATE TABLE IF NOT EXISTS pvp_queue (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL UNIQUE,
@@ -157,10 +332,10 @@ class Database:
             CREATE INDEX IF NOT EXISTS idx_pvp_battles_user2 ON pvp_battles(player2_id);
             CREATE INDEX IF NOT EXISTS idx_pvp_actions_battle ON pvp_actions(battle_id);
         """)
-        await self._migrate()
-        await self.db.commit()
 
     async def _migrate(self):
+        if self._is_pg:
+            return
         cols = [
             ("free_boxes", "INTEGER DEFAULT 0"),
             ("trophies", "INTEGER DEFAULT 0"),
@@ -189,7 +364,6 @@ class Database:
             )""")
         except aiosqlite.OperationalError:
             pass
-        await self.db.commit()
 
     async def get_or_create_user(self, telegram_id: int, username: Optional[str] = None):
         cursor = await self.db.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
@@ -198,8 +372,8 @@ class Database:
             if username and user["username"] != username:
                 await self.db.execute("UPDATE users SET username = ? WHERE telegram_id = ?", (username, telegram_id))
                 await self.db.commit()
-                user = await self.db.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
-                user = await user.fetchone()
+                cursor = await self.db.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
+                user = await cursor.fetchone()
             return self._norm_user(dict(user))
 
         code = _generate_code()
@@ -264,26 +438,45 @@ class Database:
         return self._norm_user(dict(row)) if row else None
 
     async def add_coins(self, telegram_id: int, amount: int, description: str = ""):
-        await self.db.execute("UPDATE users SET balance = balance + ? WHERE telegram_id = ?", (amount, telegram_id))
-        user = await self.get_user(telegram_id)
-        await self._add_transaction(user["id"], "earn", amount, description)
+        if self._is_pg:
+            user = await self.get_user(telegram_id)
+            if not user:
+                return
+            await self.db.execute("UPDATE users SET balance = balance + $1 WHERE telegram_id = $2", (amount, telegram_id))
+            await self._add_transaction(user["id"], "earn", amount, description)
+        else:
+            await self.db.execute("UPDATE users SET balance = balance + ? WHERE telegram_id = ?", (amount, telegram_id))
+            user = await self.get_user(telegram_id)
+            await self._add_transaction(user["id"], "earn", amount, description)
+            await self.db.commit()
         await self.db.commit()
 
     async def spend_coins(self, telegram_id: int, amount: int, description: str = ""):
         user = await self.get_user(telegram_id)
         if not user or user["balance"] < amount:
             return False
-        await self.db.execute("UPDATE users SET balance = balance - ? WHERE telegram_id = ?", (amount, telegram_id))
-        await self._add_transaction(user["id"], "spend", -amount, description)
+        if self._is_pg:
+            await self.db.execute("UPDATE users SET balance = balance - $1 WHERE telegram_id = $2", (amount, telegram_id))
+            await self._add_transaction(user["id"], "spend", amount, description)
+        else:
+            await self.db.execute("UPDATE users SET balance = balance - ? WHERE telegram_id = ?", (amount, telegram_id))
+            await self._add_transaction(user["id"], "spend", amount, description)
+            await self.db.commit()
         await self.db.commit()
         return True
 
     async def _add_transaction(self, user_id: int, ttype: str, amount: int, description: str = ""):
-        await self.db.execute(
-            "INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)",
-            (user_id, ttype, amount, description)
-        )
-        await self.db.commit()
+        if self._is_pg:
+            await self.db.execute(
+                "INSERT INTO transactions (user_id, type, amount, description) VALUES ($1, $2, $3, $4)",
+                (user_id, ttype, amount, description)
+            )
+        else:
+            await self.db.execute(
+                "INSERT INTO transactions (user_id, type, amount, description) VALUES (?, ?, ?, ?)",
+                (user_id, ttype, amount, description)
+            )
+            await self.db.commit()
 
     async def can_claim_daily(self, telegram_id: int):
         user = await self.get_user(telegram_id)
@@ -300,13 +493,20 @@ class Database:
         can, remaining = await self.can_claim_daily(telegram_id)
         if not can:
             return False, remaining
-        await self.db.execute(
-            "UPDATE users SET balance = balance + ?, daily_last_claim = ? WHERE telegram_id = ?",
-            (DAILY_BONUS * 10, datetime.now(timezone.utc).isoformat(), telegram_id)
-        )
+        now_iso = datetime.now(timezone.utc).isoformat()
+        if self._is_pg:
+            await self.db.execute(
+                "UPDATE users SET balance = balance + $1, daily_last_claim = $2 WHERE telegram_id = $3",
+                (DAILY_BONUS * 10, now_iso, telegram_id)
+            )
+        else:
+            await self.db.execute(
+                "UPDATE users SET balance = balance + ?, daily_last_claim = ? WHERE telegram_id = ?",
+                (DAILY_BONUS * 10, now_iso, telegram_id)
+            )
+            await self.db.commit()
         user = await self.get_user(telegram_id)
         await self._add_transaction(user["id"], "daily", DAILY_BONUS * 10, "Ежедневный бонус")
-        await self.db.commit()
         return True, 0
 
     async def open_box(self, telegram_id: int):
@@ -382,20 +582,36 @@ class Database:
 
     async def get_leaderboard(self, limit: int = 20):
         legendary_ids = [c["id"] for c in CHARACTERS if c["rarity"] == "legendary"]
-        leg_placeholders = ",".join("?" * len(legendary_ids))
-        cursor = await self.db.execute(f"""
-            SELECT u.telegram_id, u.username,
-                   CAST(COALESCE(COUNT(DISTINCT uc.card_id), 0) AS INTEGER) as unique_cards,
-                   CAST(COALESCE(SUM(CASE WHEN uc.card_id IN ({leg_placeholders}) THEN uc.count ELSE 0 END), 0) AS INTEGER) as total_legendaries,
-                   COALESCE(u.trophies, 0) as trophies,
-                   COALESCE(u.battles_won, 0) as battles_won,
-                   u.main_card_id
-            FROM users u
-            LEFT JOIN user_cards uc ON u.id = uc.user_id
-            GROUP BY u.id
-            ORDER BY u.trophies DESC, unique_cards DESC
-            LIMIT ?
-        """, (*legendary_ids, limit))
+        leg_placeholders = ",".join("?" if not self._is_pg else f"${i+1}" for i in range(len(legendary_ids)))
+        if self._is_pg:
+            placeholders = ",".join(f"${i+1}" for i in range(len(legendary_ids)))
+            cursor = await self.db.execute(f"""
+                SELECT u.telegram_id, u.username,
+                       COALESCE(COUNT(DISTINCT uc.card_id), 0)::INTEGER as unique_cards,
+                       COALESCE(SUM(CASE WHEN uc.card_id IN ({placeholders}) THEN uc.count ELSE 0 END), 0)::INTEGER as total_legendaries,
+                       COALESCE(u.trophies, 0) as trophies,
+                       COALESCE(u.battles_won, 0) as battles_won,
+                       u.main_card_id
+                FROM users u
+                LEFT JOIN user_cards uc ON u.id = uc.user_id
+                GROUP BY u.id
+                ORDER BY u.trophies DESC, unique_cards DESC
+                LIMIT ${len(legendary_ids) + 1}
+            """, (*legendary_ids, limit))
+        else:
+            cursor = await self.db.execute(f"""
+                SELECT u.telegram_id, u.username,
+                       CAST(COALESCE(COUNT(DISTINCT uc.card_id), 0) AS INTEGER) as unique_cards,
+                       CAST(COALESCE(SUM(CASE WHEN uc.card_id IN ({leg_placeholders}) THEN uc.count ELSE 0 END), 0) AS INTEGER) as total_legendaries,
+                       COALESCE(u.trophies, 0) as trophies,
+                       COALESCE(u.battles_won, 0) as battles_won,
+                       u.main_card_id
+                FROM users u
+                LEFT JOIN user_cards uc ON u.id = uc.user_id
+                GROUP BY u.id
+                ORDER BY u.trophies DESC, unique_cards DESC
+                LIMIT ?
+            """, (*legendary_ids, limit))
         rows = await cursor.fetchall()
         result = []
         for r in rows:
@@ -544,7 +760,11 @@ class Database:
         return True, "Награда получена!"
 
     async def _add_coins_internal(self, user_id: int, amount: int, desc: str):
-        await self.db.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (amount, user_id))
+        if self._is_pg:
+            await self.db.execute("UPDATE users SET balance = balance + $1 WHERE id = $2", (amount, user_id))
+        else:
+            await self.db.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (amount, user_id))
+            await self.db.commit()
         await self._add_transaction(user_id, "earn", amount, desc)
 
     # ── Equip ──
@@ -559,7 +779,8 @@ class Database:
         rows = await cursor.fetchall()
         equipped = {s: None for s in EQUIP_SLOTS}
         for row in rows:
-            if row["slot"] not in EQUIP_SLOTS:
+            slot = row["slot"]
+            if slot not in EQUIP_SLOTS:
                 continue
             card = next((c for c in CHARACTERS if c["id"] == row["card_id"]), None)
             if card:
@@ -571,7 +792,7 @@ class Database:
                 ccount = uc_row["count"] if uc_row else 0
                 level = min(ccount, 10)
                 stats = _card_power(card, level)
-                equipped[row["slot"]] = {**card, "count": ccount, "level": level, **stats}
+                equipped[slot] = {**card, "count": ccount, "level": level, **stats}
         return equipped
 
     async def equip_card(self, telegram_id: int, card_id: int, slot: str):
@@ -590,10 +811,20 @@ class Database:
         card = next((c for c in CHARACTERS if c["id"] == card_id), None)
         if not card:
             return False, "Карта не существует"
-        await self.db.execute(
-            "INSERT OR REPLACE INTO equipped (user_id, slot, card_id) VALUES (?, ?, ?)",
-            (user["id"], slot, card_id)
-        )
+        if self._is_pg:
+            await self.db.execute(
+                "DELETE FROM equipped WHERE user_id = $1 AND slot = $2",
+                (user["id"], slot)
+            )
+            await self.db.execute(
+                "INSERT INTO equipped (user_id, slot, card_id) VALUES ($1, $2, $3)",
+                (user["id"], slot, card_id)
+            )
+        else:
+            await self.db.execute(
+                "INSERT OR REPLACE INTO equipped (user_id, slot, card_id) VALUES (?, ?, ?)",
+                (user["id"], slot, card_id)
+            )
         await self.db.commit()
         return True, f"{card['emoji']} {card['name']} экипирована в {slot}"
 
@@ -767,7 +998,6 @@ class Database:
         if challenger_id == target_id:
             return None, "Нельзя сражаться с самим собой!"
 
-        # Get challenger team
         ch_equipped = await self.get_equipped(challenger_id)
         ch_team = [v for v in ch_equipped.values() if v is not None]
         if not ch_team:
@@ -783,7 +1013,6 @@ class Database:
                     stats = _card_power(card, level)
                     ch_team = [{**card, "level": level, **stats}]
 
-        # Get target team
         tg_equipped = await self.get_equipped(target_id)
         tg_team = [v for v in tg_equipped.values() if v is not None]
         if not tg_team:
@@ -819,7 +1048,7 @@ class Database:
                 result, tg_hp = _battle_turn(
                     attacker, attacker["attack"],
                     tg_team[0], max(f["defense"] for f in tg_team),
-                    tg_hp
+                    tg_hp, ch_hp
                 )
                 result["turn"] = turn_num
                 result["attacker_is_challenger"] = True
@@ -833,7 +1062,7 @@ class Database:
                 result, ch_hp = _battle_turn(
                     attacker, attacker["attack"],
                     ch_team[0], max(f["defense"] for f in ch_team),
-                    ch_hp
+                    ch_hp, tg_hp
                 )
                 result["turn"] = turn_num
                 result["attacker_is_challenger"] = False
@@ -851,7 +1080,6 @@ class Database:
 
         challenger_won = ch_hp > 0 and tg_hp <= 0
 
-        # Rewards
         await self.db.execute(
             "UPDATE users SET battles_total = battles_total + 1 WHERE telegram_id IN (?, ?)",
             (challenger_id, target_id)
@@ -871,7 +1099,6 @@ class Database:
                 (BATTLE_LOSE_TROPHIES, challenger_id)
             )
 
-        # Store in pvp_battles table
         winner_id = challenger["id"] if challenger_won else target["id"]
         await self.db.execute("""
             INSERT INTO pvp_battles (player1_id, player2_id, player1_hp, player2_hp, player1_max_hp, player2_max_hp, current_turn, state, winner_id)
@@ -904,15 +1131,14 @@ class Database:
             return None, "Пользователь не найден"
         if await self.get_active_pvp(telegram_id):
             return None, "У вас уже есть активный PvP бой!"
-        try:
+        cursor = await self.db.execute("SELECT id FROM pvp_queue WHERE user_id = ?", (user["id"],))
+        existing = await cursor.fetchone()
+        if not existing:
             await self.db.execute(
-                "INSERT OR IGNORE INTO pvp_queue (user_id) VALUES (?)",
+                "INSERT INTO pvp_queue (user_id) VALUES (?)",
                 (user["id"],)
             )
             await self.db.commit()
-        except aiosqlite.IntegrityError:
-            pass
-        # Try to match
         match = await self._match_players(telegram_id)
         if match:
             return match, None
@@ -932,14 +1158,12 @@ class Database:
         cursor = await self.db.execute("SELECT id FROM pvp_queue WHERE user_id = ?", (user["id"],))
         in_queue = await cursor.fetchone() is not None
         if in_queue:
-            # Check if matched
             match = await self._check_just_matched(telegram_id)
             if match:
                 return {"in_queue": False, "matched": match}
             cursor2 = await self.db.execute("SELECT COUNT(*) as cnt FROM pvp_queue")
             count = (await cursor2.fetchone())[0]
             return {"in_queue": True, "queue_size": count}
-        # Check for active battle
         active = await self.get_active_pvp(telegram_id)
         if active:
             return {"in_queue": False, "in_battle": True, "battle": active}
@@ -973,18 +1197,18 @@ class Database:
         if not match:
             return None
         target_tid = match["tid"]
-        # Remove both from queue
+        target_user = await self.get_user(target_tid)
+        if not target_user:
+            return None
         await self.db.execute("DELETE FROM pvp_queue WHERE user_id IN (?, ?)",
-                              (user["id"], (await self.get_user(target_tid))["id"]))
+                              (user["id"], target_user["id"]))
         await self.db.commit()
-        # Create battle via do_pvp_battle
         result, error = await self.do_pvp_battle(telegram_id, target_tid)
         if error:
             return None
         return result
 
     async def _check_just_matched(self, telegram_id: int):
-        # Check if there's a just-finished battle for this player
         user = await self.get_user(telegram_id)
         if not user:
             return None
@@ -996,17 +1220,13 @@ class Database:
         row = await cursor.fetchone()
         if not row:
             return None
-        # Mark as seen
         await self.db.execute("UPDATE pvp_battles SET state = 'archived' WHERE id = ?", (row["id"],))
         await self.db.commit()
         battle = dict(row)
-        # Determine who won
         p1_id = battle["player1_id"]
-        p2_id = battle["player2_id"]
-        # Use the result stored in the battle
         challenger_won = battle["winner_id"] == p1_id
-        p1_user = await self.get_user((await (await self.db.execute("SELECT telegram_id FROM users WHERE id = ?", (p1_id,))).fetchone())[0])
-        p2_user = await self.get_user((await (await self.db.execute("SELECT telegram_id FROM users WHERE id = ?", (p2_id,))).fetchone())[0])
+        p1_user = await self.get_user(await (await (await self.db.execute("SELECT telegram_id FROM users WHERE id = ?", (p1_id,))).fetchone())[0])
+        p2_user = await self.get_user(await (await (await self.db.execute("SELECT telegram_id FROM users WHERE id = ?", (p2_id := battle["player2_id"]))).fetchone())[0])
         return {
             "challenger_won": challenger_won,
             "challenger_username": p1_user.get("username") or f"ID{p1_user['telegram_id']}" if p1_user else "?",
