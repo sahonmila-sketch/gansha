@@ -1385,11 +1385,33 @@ class Database:
                 next_m = m
                 break
 
+        # Compute multiplier: main card bonus + collection bonus
+        rarity_mult = {"common": 1.0, "rare": 1.1, "epic": 1.25, "legendary": 1.5}
+        main_bonus = 1.0
+        if user.get("main_card_id"):
+            mc = await self.get_main_card(telegram_id)
+            if mc:
+                main_bonus = rarity_mult.get(mc.get("rarity", "common"), 1.0)
+        col_mult = {"common": 0.01, "rare": 0.02, "epic": 0.03, "legendary": 0.05}
+        cursor = await self.db.execute(
+            "SELECT card_id, count FROM user_cards WHERE user_id = ?",
+            (user["id"],)
+        )
+        owned = await cursor.fetchall()
+        col_bonus = 0.0
+        for row in owned:
+            cid = row["card_id"]
+            card = next((c for c in CHARACTERS if c["id"] == cid), None)
+            if card:
+                col_bonus += col_mult.get(card["rarity"], 0)
+        multiplier = round(main_bonus + col_bonus, 2)
+
         return {
             "rating": rating,
             "unclaimed": unclaimed,
             "milestones": milestones,
             "next_milestone": next_m,
+            "multiplier": multiplier,
         }
 
     async def submit_bb_score(self, telegram_id: int, score: int):

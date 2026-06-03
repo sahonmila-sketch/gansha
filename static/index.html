@@ -241,7 +241,7 @@ function fm(s){const h=Math.floor(s/3600),m=Math.floor(s%3600/60);return h?h+'ч
 function r2(t){return new Promise(r=>setTimeout(r,t))}
 
 qa('.tb-b').forEach(b=>b.addEventListener('click',()=>sp(b.dataset.p)));
-function sp(n){qa('.pg').forEach(p=>p.classList.remove('on'));qa('.tb-b').forEach(b=>b.classList.remove('on'));$(n).classList.add('on');q('.tb-b[data-p="'+n+'"]').classList.add('on');if(typeof BB!=='undefined'&&n!=='p4')BB.destroy();lp(n)}
+function sp(n){qa('.pg').forEach(p=>p.classList.remove('on'));qa('.tb-b').forEach(b=>b.classList.remove('on'));$(n).classList.add('on');q('.tb-b[data-p="'+n+'"]').classList.add('on');if(typeof BB!=='undefined'&&BB.canvas){if(n!=='p4')BB.pause();else BB.resume()}lp(n)}
 async function lp(n){if(!uid)return;try{if(n==='p1')await rP();else if(n==='p2')rG();else if(n==='p3')await rC();else if(n==='p4')rBB();else if(n==='p5')await rT()}catch(e){}}
 
 async function fP(){
@@ -294,8 +294,12 @@ async function eC(id){try{const r=await ap('/set-main-card/'+uid+'/'+id,{method:
 let bbActive=false, bbRating=0;
 async function rBB(){
   const hs=parseInt(localStorage.getItem('bb_highscore')||'0');
-  if(bbActive){$('p4').innerHTML='<div id=bbContainer></div>';return}
-  try{const d=await ap('/bb-data/'+uid);bbRating=d.rating||0}catch(e){}
+  if(bbActive){
+    if($('bbContainer')&&typeof BB!=='undefined'&&BB.canvas)return;
+    $('p4').innerHTML='<div id=bbContainer></div>';
+    return
+  }
+  try{const d=await ap('/bb-data/'+uid);bbRating=d.rating||0;if(d.multiplier){window._bbMult=d.multiplier}}catch(e){}
   let mh='';
   if(bbRating>0){
     const next=d&&d.next_milestone?d.next_milestone:null;
@@ -305,15 +309,16 @@ async function rBB(){
     mh+='</div>'
     if(d&&d.unclaimed&&d.unclaimed.length){mh+='<div class=sf style=text-align:center>';for(const t of d.unclaimed){const r=d.milestones.find(m=>m.threshold===t);mh+='<button class="b b-g b-sm" onclick="cBM('+t+')" style=margin:2px>🎁 '+t.toLocaleString()+' — '+(r?r.reward:'?')+' ящиков</button>'}mh+='</div>'}
   }
-  $('p4').innerHTML=mh+'<div class=sf style=text-align:center><div style="font-size:48px;margin-bottom:4px">🧩</div><div style="font-size:18px;font-weight:700;margin-bottom:2px">Блок Бласт</div><div style="font-size:12px;color:var(--tx2);margin-bottom:8px">Собери наибольший счёт!</div>'+(hs>0?'<div style="font-size:13px;color:var(--gd);margin-bottom:8px">🏆 Рекорд: <b>'+hs+'</b></div>':'')+'<button class="b b-g bb-btn" onclick="startBB()">▶ Играть</button></div>'
+  const mb=window._bbMult||1;
+  const mbHtml=mb>1?'<div style="font-size:11px;color:var(--tx2);margin-bottom:6px">⭐ Множитель: <b style="color:var(--gd)">x'+mb+'</b> <span style="color:var(--tx2);font-size:10px">(карты + коллекция)</span></div>':'';
+  $('p4').innerHTML=mh+'<div class=sf style=text-align:center><div style="font-size:48px;margin-bottom:4px">🧩</div><div style="font-size:18px;font-weight:700;margin-bottom:2px">Блок Бласт</div><div style="font-size:12px;color:var(--tx2);margin-bottom:8px">Собери наибольший счёт!</div>'+(hs>0?'<div style="font-size:13px;color:var(--gd);margin-bottom:8px">🏆 Рекорд: <b>'+hs+'</b></div>':'')+mbHtml+'<button class="b b-g bb-btn" onclick="startBB()">▶ Играть</button></div>'
 }
 async function cBM(t){
   try{const r=await ap('/claim-bb-milestone/'+uid+'/'+t,{method:'POST'});T('🎁 Получено '+r.reward,'s');await fP();rBB()}catch(e){T(e.message,'e')}
 }
 function startBB(){
   bbActive=true;
-  const cr=ud&&ud.main_card?ud.main_card.rarity:'common';
-  const cb={common:1,rare:1.2,epic:1.5,legendary:2}[cr]||1;
+  const cb=window._bbMult||1;
   $('p4').innerHTML='<div id=bbContainer></div>';
   setTimeout(function(){
     const c=$('bbContainer');

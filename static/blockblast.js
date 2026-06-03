@@ -111,8 +111,9 @@ const BB = {
   },
 
   startTimer() {
-    if(!this.hasTimer) return;
+    if(!this.hasTimer || this._paused) return;
     this._timerInt = setInterval(() => {
+      if(this._paused) return;
       this.timer--;
       const el = this.container.querySelector('.bb-hdr span:first-child');
       if(el) el.textContent = `\uD83E\uDE99 ${this.timer}s`;
@@ -124,6 +125,18 @@ const BB = {
         if(this.onEnd) this._endTimer = setTimeout(() => this.onEnd(this.score), 500);
       }
     }, 1000);
+  },
+
+  pause() {
+    this._paused = true;
+    clearInterval(this._timerInt);
+  },
+
+  resume() {
+    if(!this._paused) return;
+    this._paused = false;
+    this.startTimer();
+    this.draw();
   },
 
   spawnPieces() {
