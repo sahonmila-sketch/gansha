@@ -197,7 +197,7 @@ const BB = {
       const pi = this.getPieceAt(t.clientX, t.clientY);
       if(pi !== null && !this.gameOver) {
         this.dragPiece = {idx: pi, piece: this.pieces[pi].map(p => [...p]), color: this.pieceColors[pi]};
-        this.dragOffX = 0; this.dragOffY = 0;
+        this.dragOffX = t.clientX; this.dragOffY = t.clientY;
       }
     }
     if(e.type === 'touchmove' && this.dragPiece) {
@@ -213,13 +213,14 @@ const BB = {
       const pi = this.getPieceAt(e.clientX, e.clientY);
       if(pi !== null && !this.gameOver) {
         this.dragPiece = {idx: pi, piece: this.pieces[pi].map(p => [...p]), color: this.pieceColors[pi]};
-        this.dragOffX = 0; this.dragOffY = 0;
+        this.dragOffX = e.clientX; this.dragOffY = e.clientY;
         this._mouseDown = true;
       }
     }
     if(e.type === 'mousemove' && this._mouseDown && this.dragPiece) {
       this.dragOffX = e.clientX;
       this.dragOffY = e.clientY;
+      this._mouseMoved = true;
       this.draw();
     }
   },
