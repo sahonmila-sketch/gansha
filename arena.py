@@ -1,11 +1,14 @@
 import asyncio
 import random
 import logging
+import time
 from datetime import datetime, timedelta, timezone
 
 from config import ARENA_SIZE, ARENA_CYCLE_MINUTES, ARENA_WIN_TROPHIES, ARENA_WIN_COINS, ARENA_LOSE_COINS
 
 logger = logging.getLogger(__name__)
+
+ARENA_COUNTDOWN = 50
 
 
 class ArenaManager:
@@ -13,6 +16,7 @@ class ArenaManager:
         self.db = db
         self._scheduler_task = None
         self._arena_cache = {}
+        self._countdowns = {}
 
     async def start(self):
         self._scheduler_task = asyncio.create_task(self._scheduler_loop())
@@ -29,20 +33,29 @@ class ArenaManager:
 
     async def _scheduler_loop(self):
         while True:
-            await asyncio.sleep(ARENA_CYCLE_MINUTES * 60)
+            await asyncio.sleep(10)
             try:
-                await self._tick()
+                now = time.time()
+                expired = [aid for aid, deadline in self._countdowns.items() if now >= deadline]
+                for aid in expired:
+                    del self._countdowns[aid]
+                    arena = await self._get_arena(aid)
+                    if arena and arena["state"] == "waiting":
+                        players = await self._get_arena_players(aid)
+                        if len(players) >= 2:
+                            logger.info(f"Arena #{aid} countdown expired, starting match")
+                            await self._start_match(aid)
+                await self._cleanup_finished()
+                await self._cleanup_old_cache()
             except Exception as e:
                 logger.error(f"Arena tick error: {e}")
 
-    async def _tick(self):
-        open_arena = await self._get_open_arena()
-        if open_arena:
-            players = await self._get_arena_players(open_arena["id"])
-            if len(players) >= 2:
-                await self._start_match(open_arena["id"])
-        await self._create_new_arena()
-        await self._cleanup_finished()
+    async def _get_arena(self, arena_id: int):
+        cursor = await self.db.execute(
+            "SELECT * FROM arena_instances WHERE id = ?", (arena_id,)
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
 
     async def _create_new_arena(self):
         await self.db.execute(
@@ -108,7 +121,12 @@ class ArenaManager:
 
         players = await self._get_arena_players(arena_id)
         if len(players) >= ARENA_SIZE:
+            self._countdowns.pop(arena_id, None)
             await self._start_match(arena_id)
+        elif len(players) >= 2 and arena_id not in self._countdowns:
+            deadline = time.time() + ARENA_COUNTDOWN
+            self._countdowns[arena_id] = deadline
+            logger.info(f"Arena #{arena_id} countdown started: {ARENA_COUNTDOWN}s ({len(players)} players)")
 
         return {"arena_id": arena_id, "players": len(players), "max_players": ARENA_SIZE}, None
 
@@ -222,6 +240,7 @@ class ArenaManager:
                 "finished": True,
             }
 
+        await self._create_new_arena()
         await self._cleanup_old_cache()
 
     async def get_status(self, telegram_id: int) -> dict:
@@ -243,7 +262,15 @@ class ArenaManager:
                 )
                 cnt_row = await cursor2.fetchone()
                 cnt = cnt_row[0] if hasattr(cnt_row, '__getitem__') else cnt_row["cnt"]
-                return {"state": "waiting_join", "arena_id": open_arena["id"], "players": cnt, "max_players": ARENA_SIZE}
+                countdown = self._countdowns.get(open_arena["id"])
+                remaining = max(0, int(countdown - time.time())) if countdown else 0
+                return {
+                    "state": "waiting_join",
+                    "arena_id": open_arena["id"],
+                    "players": cnt,
+                    "max_players": ARENA_SIZE,
+                    "countdown": remaining if cnt >= 2 else 0,
+                }
             return {"state": "idle"}
 
         arena = dict(row)
@@ -268,6 +295,9 @@ class ArenaManager:
                 "emoji": mc["emoji"] if mc else "💀",
             })
 
+        countdown = self._countdowns.get(arena_id)
+        remaining = max(0, int(countdown - time.time())) if countdown else 0
+
         return {
             "state": arena["state"],
             "arena_id": arena_id,
@@ -276,6 +306,7 @@ class ArenaManager:
             "total": len(all_players),
             "players": players_info,
             "snapshot": self._arena_cache.get(arena_id),
+            "countdown": remaining,
         }
 
     async def get_open_arena_info(self) -> dict:
@@ -288,7 +319,15 @@ class ArenaManager:
         )
         row = await cursor.fetchone()
         cnt = row[0] if hasattr(row, '__getitem__') else row["cnt"]
-        return {"has_open": True, "arena_id": arena["id"], "players": cnt, "max_players": ARENA_SIZE}
+        countdown = self._countdowns.get(arena["id"])
+        remaining = max(0, int(countdown - time.time())) if countdown else 0
+        return {
+            "has_open": True,
+            "arena_id": arena["id"],
+            "players": cnt,
+            "max_players": ARENA_SIZE,
+            "countdown": remaining if cnt >= 2 else 0,
+        }
 
     async def _cleanup_finished(self):
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
@@ -299,6 +338,8 @@ class ArenaManager:
         rows = await cursor.fetchall()
         for r in rows:
             aid = r[0] if hasattr(r, '__getitem__') else r["id"]
+            self._countdowns.pop(aid, None)
+            self._arena_cache.pop(aid, None)
             await self.db.execute("DELETE FROM arena_players WHERE arena_id = ?", (aid,))
             await self.db.execute("DELETE FROM arena_instances WHERE id = ?", (aid,))
         if rows:

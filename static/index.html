@@ -128,6 +128,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .arena-dot{position:absolute;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;transform:translate(-50%,-50%);transition:all .4s;z-index:2}
 .arena-dot.alive{box-shadow:0 0 10px rgba(251,191,36,.3),0 0 0 2px rgba(251,191,36,.15)}
 .arena-dot.dead{opacity:.2;filter:grayscale(1)}
+.ap-count{font-size:32px;font-weight:900;margin:4px 0;color:var(--tx)}
+.acd{display:flex;flex-direction:column;align-items:center;gap:4px;margin:8px 0;animation:acdf .5s ease}
+@keyframes acdf{0%{opacity:0;transform:scale(.8)}100%{opacity:1;transform:scale(1)}}
+.acd-n{font-size:56px;font-weight:900;background:linear-gradient(135deg,var(--gd),var(--or));-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1}
+.acd-n.p{animation:acdp .3s ease}
+@keyframes acdp{0%{transform:scale(1.4)}50%{transform:scale(1.1)}100%{transform:scale(1)}}
+.acd-l{font-size:11px;color:var(--tx2);text-transform:uppercase;letter-spacing:2px}
+.acd-b{width:120px;height:3px;background:var(--sf2);border-radius:2px;overflow:hidden;margin:2px auto}
+.acd-b-f{height:100%;background:linear-gradient(90deg,var(--gd),var(--or));border-radius:2px;transition:width 1s linear}
 </style>
 <body>
 <div class=app>
@@ -224,22 +233,56 @@ async function eC(id){try{const r=await ap('/set-main-card/'+uid+'/'+id,{method:
 
 // ── Arena ──
 
+let arenaTimer = null;
+
 async function rA(){
   try{
     const s=await ap('/arena/status/'+uid);
     const state=s.state;
     let html='';
+
+    if(arenaTimer){clearInterval(arenaTimer);arenaTimer=null}
+
     if(state==='idle'){
-      html='<div class=sf style=text-align:center><div style="font-size:48px;margin-bottom:8px">🏟️</div><div style="font-size:16px;font-weight:700">Королевская битва</div><div style="font-size:12px;color:var(--tx2);margin-bottom:8px">Подготовка арены...</div><button class="b b-g" onclick="rA()" style="margin-top:4px">🔄 Проверить снова</button></div>';
+      html='<div class=sf style=text-align:center><div style="font-size:48px;margin-bottom:8px">🏟️</div><div style="font-size:16px;font-weight:700;margin-bottom:4px">Королевская битва</div><div style="font-size:12px;color:var(--tx2);margin-bottom:12px">Подготовка арены...</div><div class="spn" style="margin:0 auto 8px"></div><div style="display:flex;justify-content:center"><button class="b b-g" onclick="rA()" style="margin:0 auto">🔄 Проверить снова</button></div></div>';
       $('p4').innerHTML=html;return;
     }
+
     if(state==='waiting_join'){
-      html='<div class=sf style=text-align:center><div style="font-size:16px;font-weight:700">🏟️ Королевская битва</div><div style="font-size:12px;color:var(--tx2);margin-bottom:4px">Ожидание игроков</div><div style="font-size:28px;font-weight:900;margin:6px 0">'+s.players+'/'+s.max_players+'</div><button class="b b-d" onclick=joinArena() style="font-size:16px;padding:14px 40px">⚔️ Вступить</button><div style="font-size:11px;color:var(--tx2);margin-top:6px">Последний выживший побеждает!</div></div>';
+      let cdHtml='';
+      if(s.countdown>0&&s.players>=2){
+        let r=s.countdown;
+        cdHtml='<div class=acd id=acd><div class=acd-n id=acdN>'+r+'</div><div class=acd-l>до начала битвы</div><div class=acd-b><div class=acd-b-f id=acdB style="width:'+(r/50*100)+'%"></div></div></div>';
+        arenaTimer=setInterval(function(){
+          r--;const ne=$('acdN'),be=$('acdB');
+          if(ne){ne.textContent=Math.max(0,r);ne.classList.remove('p');void ne.offsetWidth;ne.classList.add('p')}
+          if(be){be.style.width=Math.max(0,(r/50*100))+'%'}
+          if(r<=0){clearInterval(arenaTimer);arenaTimer=null;rA()}
+        },1000);
+      }
+      html='<div class=sf style=text-align:center>'
+        +'<div style="font-size:16px;font-weight:700;margin-bottom:2px">🏟️ Королевская битва</div>'
+        +'<div style="font-size:12px;color:var(--tx2);margin-bottom:6px">Ожидание игроков</div>'
+        +'<div class=ap-count>'+s.players+' / '+s.max_players+'</div>'
+        +cdHtml
+        +'<div style="display:flex;justify-content:center;margin:8px 0"><button class="b b-d" onclick="joinArena()" style="font-size:16px;padding:14px 40px">⚔️ Вступить</button></div>'
+        +'<div style="font-size:11px;color:var(--tx2)">Последний выживший побеждает!</div></div>';
       $('p4').innerHTML=html;return;
     }
-    // in_progress or waiting
+
+    // in_progress or waiting (player already joined)
     const snap=s.snapshot||{};
-    html='<div class=sf style=text-align:center><div style="font-size:16px;font-weight:700">🏟️ Арена #'+s.arena_id+'</div><div style="font-size:12px;color:var(--tx2)">'+(state==='in_progress'?'🔴 Бой идёт!':'🟡 Ожидание')+' | Раунд '+(s.round||0)+'</div><div style="display:flex;justify-content:center;gap:16px;margin:4px 0;font-size:13px"><span>👥 <b>'+s.alive_count+'</b>/'+s.total+'</span></div></div>';
+    html='<div class=sf style=text-align:center><div style="font-size:16px;font-weight:700">🏟️ Арена #'+s.arena_id+'</div><div style="font-size:12px;color:var(--tx2)">'+(state==='in_progress'?'🔴 Бой идёт!':'🟡 Ожидание')+' | Раунд '+(s.round||0)+'</div><div style="display:flex;justify-content:center;gap:16px;margin:4px 0;font-size:13px"><span>👥 <b>'+s.alive_count+'</b>/'+s.total+'</span></div>';
+    if(s.countdown>0){
+      let r=s.countdown;
+      html+='<div class=acd style="margin:4px auto"><div class=acd-n style="font-size:40px" id=acdN2>'+r+'</div><div class=acd-l>до начала битвы</div><div class=acd-b><div class=acd-b-f id=acdB2 style="width:'+(r/50*100)+'%"></div></div></div>';
+      arenaTimer=setInterval(function(){
+        r--;const ne=$('acdN2'),be=$('acdB2');
+        if(ne){ne.textContent=Math.max(0,r);ne.classList.remove('p');void ne.offsetWidth;ne.classList.add('p')}
+        if(be){be.style.width=Math.max(0,(r/50*100))+'%'}
+        if(r<=0){clearInterval(arenaTimer);arenaTimer=null;rA()}
+      },1000);
+    }
     // Map
     html+='<div class=sf style="padding:8px"><div class=arena-map id=arenaMap>';
     for(const p of s.players||[]){
@@ -264,7 +307,7 @@ async function rA(){
       for(const a of snap.actions){
         html+='<div style="display:flex;align-items:center;gap:4px;font-size:11px;padding:2px 0;border-bottom:1px solid rgba(255,255,255,.04)"><span>⚡</span><span><b>'+a.attacker_name+'</b> → <b>'+a.target_name+'</b> <span style="color:var(--rd)">-'+a.damage+'</span></span></div>';
       }
-      if(snap.eliminated&&snap.eliminated.length>0){html+='<div style="margin:3px 0;font-size:11px;color:var(--rd)">💀 Выбыли: '+snap.eliminated.map(e=>e.username).join(', ')+'</div>'}
+      if(snap.eliminated&&snap.eliminated.length>0){html+='<div style="margin:3px 0;font-size:11px;color:var(--rd)">💀 Выбыли: '+snap.eliminated.map(function(e){return e.username}).join(', ')+'</div>'}
       html+='</div>';
     }
     // Winner overlay
