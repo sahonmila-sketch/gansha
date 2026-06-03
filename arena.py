@@ -5,6 +5,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 from config import ARENA_SIZE, ARENA_CYCLE_MINUTES, ARENA_WIN_TROPHIES, ARENA_WIN_COINS, ARENA_LOSE_COINS
+from arena_game import game_server
 
 logger = logging.getLogger(__name__)
 
@@ -143,105 +144,68 @@ class ArenaManager:
     async def _run_match(self, arena_id: int):
         await asyncio.sleep(2)
 
-        for round_num in range(1, 101):
-            players = await self._get_arena_players(arena_id)
-            alive = [p for p in players if p["state"] == "alive"]
+        players = await self._get_arena_players(arena_id)
+        session = game_server.get_or_create(arena_id)
+        for p in players:
+            mc = await self.db.get_main_card(p["telegram_id"])
+            session.add_player(p["telegram_id"], p.get("username") or f"ID{p['telegram_id']}", mc.get("emoji", "\U0001f916") if mc else "\U0001f916", p["user_id"])
 
-            if len(alive) <= 1:
-                break
+        logger.info(f"Arena #{arena_id} game session created with {len(session.players)} players")
+        asyncio.create_task(session._run_loop())
 
-            await self.db.execute(
-                "UPDATE arena_instances SET round_number = ? WHERE id = ?",
-                (round_num, arena_id)
-            )
+        await session.game_over.wait()
 
-            round_actions = []
-            for p in alive:
-                targets = [t for t in alive if t["id"] != p["id"]]
-                if not targets:
-                    continue
-                target = random.choice(targets)
-                mc = await self.db.get_main_card(p["telegram_id"])
-                atk = random.randint(5, max(5, mc.get("atk", 10) // 2)) if mc else random.randint(3, 8)
-                new_hp = max(0, target["hp"] - atk)
-
-                round_actions.append({
-                    "attacker_tg_id": p["telegram_id"],
-                    "attacker_name": p.get("username") or f"ID{p['telegram_id']}",
-                    "target_tg_id": target["telegram_id"],
-                    "target_name": target.get("username") or f"ID{target['telegram_id']}",
-                    "damage": atk,
-                    "target_hp_before": target["hp"],
-                    "target_hp_after": new_hp,
-                })
-                target["hp"] = new_hp
-                await self.db.execute(
-                    "UPDATE arena_players SET hp = ? WHERE id = ?",
-                    (new_hp, target["id"])
-                )
-
-            await self.db.commit()
-
-            players_after = await self._get_arena_players(arena_id)
-            alive_after = [p for p in players_after if p["state"] == "alive"]
-
-            eliminated = []
-            for p in alive_after:
-                if p["hp"] <= 0:
-                    await self.db.execute(
-                        "UPDATE arena_players SET state = 'eliminated', elimination_round = ? WHERE id = ?",
-                        (round_num, p["id"])
-                    )
-                    eliminated.append(p)
-
-            await self.db.commit()
-
-            snapshot = {
-                "round": round_num,
-                "actions": round_actions,
-                "alive_count": len(alive_after) - len(eliminated),
-                "eliminated": [{
-                    "telegram_id": p["telegram_id"],
-                    "username": p.get("username") or f"ID{p['telegram_id']}",
-                } for p in eliminated],
-            }
-            self._arena_cache[arena_id] = snapshot
-
-            if len(alive_after) - len(eliminated) <= 1:
-                break
-            await asyncio.sleep(0.8)
-
+        winner_id = session.winner_id
         final_players = await self._get_arena_players(arena_id)
-        alive_final = [p for p in final_players if p["state"] == "alive" and p["hp"] > 0]
-        winner = alive_final[0] if alive_final else None
 
-        if winner:
-            now_str = datetime.now(timezone.utc).isoformat()
+        winner_record = next((p for p in final_players if p["telegram_id"] == winner_id), None) if winner_id else None
+
+        now_str = datetime.now(timezone.utc).isoformat()
+        if winner_record:
             await self.db.execute(
-                "UPDATE arena_instances SET state = 'finished', finished_at = ?, winner_id = ? WHERE id = ?",
-                (now_str, winner["id"], arena_id)
+                "UPDATE arena_instances SET state = 'finished', finished_at = ?, winner_id = ?, round_number = ? WHERE id = ?",
+                (now_str, winner_record["id"], 99, arena_id)
             )
-            await self.db.add_coins(winner["telegram_id"], ARENA_WIN_COINS, f"Победа на арене #{arena_id}")
+            await self.db.add_coins(winner_record["telegram_id"], ARENA_WIN_COINS, f"\u041f\u043e\u0431\u0435\u0434\u0430 \u043d\u0430 \u0430\u0440\u0435\u043d\u0435 #{arena_id}")
             await self.db.execute(
                 "UPDATE users SET trophies = trophies + ? WHERE telegram_id = ?",
-                (ARENA_WIN_TROPHIES, winner["telegram_id"])
+                (ARENA_WIN_TROPHIES, winner_record["telegram_id"])
             )
             for p in final_players:
-                if p["telegram_id"] != winner["telegram_id"]:
-                    await self.db.add_coins(p["telegram_id"], ARENA_LOSE_COINS, f"Участие в арене #{arena_id}")
+                ps = session.players.get(p["telegram_id"])
+                kills = ps.kills if ps else 0
+                if p["telegram_id"] != winner_record["telegram_id"]:
+                    await self.db.add_coins(p["telegram_id"], ARENA_LOSE_COINS + kills * 5, f"\u0423\u0447\u0430\u0441\u0442\u0438\u0435 \u0432 \u0430\u0440\u0435\u043d\u0435 #{arena_id}")
+                await self.db.execute(
+                    "UPDATE arena_players SET state = ?, hp = ? WHERE id = ?",
+                    ("eliminated" if p["telegram_id"] != winner_record["telegram_id"] else "alive", ps.hp if ps else 0, p["id"])
+                )
             await self.db.commit()
 
             self._arena_cache[arena_id] = {
-                **self._arena_cache.get(arena_id, {}),
+                "round": 99,
+                "actions": [],
+                "alive_count": 1,
+                "eliminated": [],
                 "winner": {
-                    "telegram_id": winner["telegram_id"],
-                    "username": winner.get("username") or f"ID{winner['telegram_id']}",
+                    "telegram_id": winner_record["telegram_id"],
+                    "username": winner_record.get("username") or f"ID{winner_record['telegram_id']}",
                 },
                 "finished": True,
             }
+        else:
+            await self.db.execute(
+                "UPDATE arena_instances SET state = 'finished', finished_at = ? WHERE id = ?",
+                (now_str, arena_id)
+            )
+            await self.db.commit()
+            for p in final_players:
+                await self.db.add_coins(p["telegram_id"], ARENA_LOSE_COINS, f"\u0423\u0447\u0430\u0441\u0442\u0438\u0435 \u0432 \u0430\u0440\u0435\u043d\u0435 #{arena_id}")
 
+        logger.info(f"Arena #{arena_id} finished, winner: {winner_id}")
         await self._create_new_arena()
         await self._cleanup_old_cache()
+        game_server.remove(arena_id)
 
     async def get_status(self, telegram_id: int) -> dict:
         cursor = await self.db.execute(
