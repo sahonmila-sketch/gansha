@@ -6,7 +6,11 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN", "ВАШ_ТОКЕН_ОТ_BOTFATHER")
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
 API_PORT = int(os.getenv("PORT") or os.getenv("API_PORT", "8000"))
-_railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN")
+_railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN") or (
+    f"{os.getenv('RAILWAY_SERVICE_NAME')}-{os.getenv('RAILWAY_ENVIRONMENT_NAME')}.up.railway.app"
+    if os.getenv("RAILWAY_SERVICE_NAME") and os.getenv("RAILWAY_ENVIRONMENT_NAME")
+    else None
+)
 if _railway_domain:
     WEBAPP_URL = f"https://{_railway_domain}/static/index.html"
 else:
