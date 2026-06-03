@@ -16,6 +16,7 @@ class ArenaManager:
 
     async def start(self):
         self._scheduler_task = asyncio.create_task(self._scheduler_loop())
+        await self._create_new_arena()
         logger.info("Arena scheduler started")
 
     async def stop(self):
