@@ -10,18 +10,15 @@ from aiogram.types import (
 )
 from aiogram.enums.parse_mode import ParseMode
 
-from config import BOT_TOKEN, WEBAPP_URL, CURRENCY_NAME, BOX_PRICE, STARS_PACKAGES, ARENA_SIZE, ARENA_WIN_TROPHIES, ARENA_WIN_COINS, ARENA_LOSE_COINS, RARITIES
+from config import BOT_TOKEN, WEBAPP_URL, CURRENCY_NAME, BOX_PRICE, STARS_PACKAGES, RARITIES
 from database import Database
-from arena import ArenaManager
+
 
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 db = Database()
-arena_manager = None
-
-
 def main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🎁 Открыть ящик", web_app=types.WebAppInfo(url=WEBAPP_URL))],
@@ -242,69 +239,6 @@ async def cmd_kit(message: types.Message):
     await message.answer(text, parse_mode=ParseMode.HTML, reply_markup=main_keyboard())
 
 
-@dp.message(Command("arena"))
-async def cmd_arena(message: types.Message):
-    if not arena_manager:
-        await message.answer("❌ Арена временно недоступна")
-        return
-    status = await arena_manager.get_status(message.from_user.id)
-    if status["state"] == "idle" or status["state"] == "waiting_join":
-        open_info = await arena_manager.get_open_arena_info()
-        text = (
-            f"⚔️ <b>Королевская битва</b> 🏟️\n\n"
-            f"10 игроков — 1 победитель. Сражайся до последнего!\n\n"
-            f"┌ <b>Информация</b>\n"
-            f"├ 👥 Игроков: <b>{open_info['players']}</b>/{ARENA_SIZE}\n"
-            f"├ 🏆 Победа: +{ARENA_WIN_TROPHIES} трофеев +{ARENA_WIN_COINS} монет\n"
-            f"└ 💰 Утешение: +{ARENA_LOSE_COINS} монет\n\n"
-            f"Нажми кнопку, чтобы присоединиться! 👇"
-        )
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="⚔️ Вступить на арену", web_app=types.WebAppInfo(url=WEBAPP_URL))],
-            [InlineKeyboardButton(text="🔄 Обновить статус", callback_data="arena_status")],
-        ])
-        await message.answer(text, parse_mode=ParseMode.HTML, reply_markup=kb)
-    elif status["state"] in ("in_progress", "waiting"):
-        status_icon = "🔴" if status["state"] == "in_progress" else "🟡"
-        status_label = "Битва идёт!" if status["state"] == "in_progress" else "Ожидание игроков"
-        text = (
-            f"🏟️ <b>Арена #{status['arena_id']}</b>\n\n"
-            f"┌ <b>Статус</b>\n"
-            f"├ {status_icon} {status_label}\n"
-            f"├ 👥 Игроков: <b>{status['alive_count']}</b>/{status['total']}\n"
-            f"└ 📊 Раунд: <b>{status.get('round', 0)}</b>\n"
-        )
-        my = next((p for p in status.get("players", []) if p["telegram_id"] == message.from_user.id), None)
-        if my:
-            hp_pct = round(my['hp'] / my['max_hp'] * 100) if my['max_hp'] > 0 else 0
-            hp_bar = "🟢" if hp_pct > 60 else "🟡" if hp_pct > 30 else "🔴"
-            text += (
-                f"\n┌ <b>Вы</b>\n"
-                f"├ {hp_bar} ❤️ {my['hp']}/{my['max_hp']}\n"
-                f"└ 📌 Статус: <b>{'✅ Жив' if my['state'] == 'alive' else '💀 Устранён'}</b>"
-            )
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🏟️ Смотреть арену", web_app=types.WebAppInfo(url=WEBAPP_URL))],
-            [InlineKeyboardButton(text="🔄 Обновить", callback_data="arena_status")],
-        ])
-        await message.answer(text, parse_mode=ParseMode.HTML, reply_markup=kb)
-    elif status["state"] == "finished":
-        snap = status.get("snapshot", {})
-        winner = snap.get("winner", {})
-        text = (
-            f"🏟️ <b>Арена завершена!</b>\n\n"
-            f"🥇 <b>Победитель:</b> {winner.get('username', '?')}\n\n"
-            f"Новая игра начнётся скоро!"
-        )
-        await message.answer(text, parse_mode=ParseMode.HTML, reply_markup=main_keyboard())
-
-
-@dp.callback_query(lambda c: c.data == "arena_status")
-async def cb_arena_status(callback: types.CallbackQuery):
-    await cmd_arena(callback.message)
-    await callback.answer()
-
-
 @dp.message(Command("pvp"))
 async def cmd_pvp(message: types.Message):
     args = message.text.split()
@@ -418,7 +352,7 @@ async def main():
         BotCommand(command="kit", description="👀 Моя экипировка"),
         BotCommand(command="setmain", description="⭐ Выбрать главного"),
         BotCommand(command="pvp", description="👤 Битва с игроком"),
-        BotCommand(command="arena", description="🏟️ Battle Royale"),
+
     ], scope=BotCommandScopeDefault())
 
     asyncio.create_task(daily_notifier())

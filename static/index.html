@@ -4,7 +4,6 @@
 <meta name=viewport content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Gacha Battle</title>
 <script src=https://telegram.org/js/telegram-web-app.js></script>
-<script src=https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js></script>
 <script src=/static/blockblast.js></script>
 <style>
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
@@ -27,7 +26,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .pg.on{display:block}
 @keyframes pf{0%{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 .sf{background:var(--sf);border-radius:12px;padding:14px;margin-bottom:8px;position:relative}
-.b{display:flex;align-items:center;justify-content:center;gap:6px;padding:12px 20px;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;transition:transform .1s}
+.b{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:12px 20px;border:none;border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;transition:transform .1s}
 .b:active{transform:scale(.95)}.b:disabled{opacity:.4;transform:none}
 .b-g{background:linear-gradient(135deg,var(--gd),var(--or));color:#0f0f22;box-shadow:0 4px 20px rgba(251,191,36,.25)}
 .b-d{background:linear-gradient(135deg,var(--rd),var(--or));color:#fff;box-shadow:0 4px 20px rgba(239,68,68,.25)}
@@ -112,8 +111,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 @keyframes spin{to{transform:rotate(360deg)}}
 .ts{position:fixed;bottom:72px;left:50%;transform:translateX(-50%);background:#1c1c3a;color:#fff;padding:10px 20px;border-radius:10px;font-size:13px;z-index:999;transition:opacity .3s,transform .3s;box-shadow:0 4px 30px rgba(0,0,0,.6);max-width:88%;text-align:center;border:1px solid rgba(255,255,255,.06)}
 .ts.h{opacity:0;transform:translateX(-50%) translateY(24px);pointer-events:none}
-
-/* ─── AVATAR / CROWN / RANK ─── */
 .rank-badge{display:inline-flex;align-items:center;gap:4px;background:var(--sf2);padding:2px 10px 2px 6px;border-radius:20px;font-size:11px;font-weight:700;margin:2px auto}
 .rank-badge.t1{background:linear-gradient(135deg,rgba(251,191,36,.2),rgba(245,158,11,.1));border:1px solid rgba(251,191,36,.3)}
 .rank-crown{font-size:28px;position:absolute;top:-8px;left:50%;transform:translateX(-50%);filter:drop-shadow(0 0 20px rgba(251,191,36,.5));animation:cb .8s ease infinite}
@@ -126,19 +123,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .lb-av{font-size:22px;width:32px;text-align:center}
 .lb-n{font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
 .lb-s{font-size:11px;color:var(--tx2);white-space:nowrap}
-.arena-map{position:relative;width:100%;aspect-ratio:1;background:var(--sf);border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,.05);margin:4px 0}
-.arena-dot{position:absolute;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;transform:translate(-50%,-50%);transition:all .4s;z-index:2}
-.arena-dot.alive{box-shadow:0 0 10px rgba(251,191,36,.3),0 0 0 2px rgba(251,191,36,.15)}
-.arena-dot.dead{opacity:.2;filter:grayscale(1)}
-.ap-count{font-size:32px;font-weight:900;margin:4px 0;color:var(--tx)}
-.acd{display:flex;flex-direction:column;align-items:center;gap:4px;margin:8px 0;animation:acdf .5s ease}
-@keyframes acdf{0%{opacity:0;transform:scale(.8)}100%{opacity:1;transform:scale(1)}}
-.acd-n{font-size:56px;font-weight:900;background:linear-gradient(135deg,var(--gd),var(--or));-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1}
-.acd-n.p{animation:acdp .3s ease}
-@keyframes acdp{0%{transform:scale(1.4)}50%{transform:scale(1.1)}100%{transform:scale(1)}}
-.acd-l{font-size:11px;color:var(--tx2);text-transform:uppercase;letter-spacing:2px}
-.acd-b{width:120px;height:3px;background:var(--sf2);border-radius:2px;overflow:hidden;margin:2px auto}
-.acd-b-f{height:100%;background:linear-gradient(90deg,var(--gd),var(--or));border-radius:2px;transition:width 1s linear}
+/* Block Blast tab styles */
+.bb-wrap{display:flex;flex-direction:column;align-items:center;gap:6px;padding:6px}
+.bb-btn{font-size:18px;padding:14px 32px;margin:6px auto}
+.bb-hs{font-size:12px;color:var(--tx2);text-align:center;margin:4px 0}
 </style>
 <body>
 <div class=app>
@@ -158,22 +146,71 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
     <button class=tb-b data-p=p1>👤Профиль</button>
     <button class=tb-b data-p=p2>🎁Ящик</button>
     <button class=tb-b data-p=p3>📦Карты</button>
-    <button class=tb-b data-p=p4>🏟️Арена</button>
+    <button class=tb-b data-p=p4>🧩Блоки</button>
     <button class=tb-b data-p=p5>🏆Топ</button>
   </div>
 </div>
 <div id=ts class="ts h"></div><div id=pt class=pt></div>
 <script>
 const A=window.location.origin,RS=['common','rare','epic','legendary'];
-let tg,uid,ud={},arenaInt=null;
+let tg,uid,ud={};
 try{tg=window.Telegram.WebApp;tg.expand();tg.ready();tg.setHeaderColor('#07070f');tg.setBackgroundColor('#07070f');uid=tg.initDataUnsafe?.user?.id}catch(e){}
 const $=id=>document.getElementById(id),q=(s,p)=>p?p.querySelector(s):document.querySelector(s),qa=(s,p)=>p?[...p.querySelectorAll(s)]:[...document.querySelectorAll(s)];
 const _ri=r=>Math.min(Math.max(RS.indexOf(r),0),3);
 const _gr=i=>'g'+i,_id=i=>'c'+i,_bg=i=>'g'+i+'r';
 
+// ── Sound System (Web Audio) ──
+const Sfx = {
+  _ctx: null,
+  _init() {
+    if(!this._ctx) this._ctx = new (window.AudioContext || window.webkitAudioContext)();
+    if(this._ctx.state === 'suspended') this._ctx.resume();
+  },
+  _osc(freq, start, dur, vol, type) {
+    const o = this._ctx.createOscillator();
+    const g = this._ctx.createGain();
+    o.type = type || 'sine';
+    o.connect(g); g.connect(this._ctx.destination);
+    o.frequency.setValueAtTime(freq, start);
+    g.gain.setValueAtTime(vol, start);
+    g.gain.exponentialRampToValueAtTime(0.001, start + dur);
+    o.start(start); o.stop(start + dur);
+  },
+  box() {
+    this._init(); const t = this._ctx.currentTime;
+    this._osc(400, t, 0.08, 0.25, 'sine');
+    this._osc(600, t + 0.06, 0.08, 0.2, 'sine');
+    this._osc(800, t + 0.12, 0.1, 0.15, 'sine');
+  },
+  rare() {
+    this._init(); const t = this._ctx.currentTime;
+    this._osc(523, t, 0.12, 0.2, 'triangle');
+    this._osc(659, t + 0.1, 0.12, 0.18, 'triangle');
+    this._osc(784, t + 0.2, 0.18, 0.15, 'triangle');
+    this._osc(1047, t + 0.3, 0.25, 0.12, 'triangle');
+  },
+  epic() {
+    this._init(); const t = this._ctx.currentTime;
+    for(let i = 0; i < 4; i++) this._osc([392, 523, 659, 784][i], t + i * 0.12, 0.2, 0.2, 'triangle');
+    this._osc(1047, t + 0.48, 0.35, 0.15, 'sine');
+  },
+  legendary() {
+    this._init(); const t = this._ctx.currentTime;
+    const notes = [523, 659, 784, 1047, 784, 1047, 1319, 1568];
+    for(let i = 0; i < notes.length; i++) this._osc(notes[i], t + i * 0.1, 0.25, 0.25, 'sine');
+    this._osc(1568, t + 0.8, 0.5, 0.3, 'triangle');
+    this._osc(2093, t + 0.9, 0.6, 0.2, 'sine');
+  },
+  click() {
+    this._init(); const t = this._ctx.currentTime;
+    this._osc(800, t, 0.02, 0.1, 'square');
+  }
+};
+
 function T(m,t){const e=$('ts');e.textContent=m;e.style.background=t==='e'?'var(--rd)':t==='s'?'var(--gr)':'#1c1c3a';e.classList.remove('h');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.add('h'),2600)}
 
 function Pt(c){
+  Sfx.click();
   const p=$('pt');p.innerHTML='';const n=c===3?50:c===2?25:c===1?12:6;const cl=['#6b7280','#60a5fa','#a78bfa','#fbbf24'][c];
   for(let i=0;i<n;i++){const e=document.createElement('div');e.className='pp';e.style.background=cl;e.style.left=(15+Math.random()*70)+'%';e.style.top=(20+Math.random()*40)+'%';e.style.setProperty('--x',(-120+Math.random()*240)+'px');e.style.setProperty('--y',(-180-Math.random()*250)+'px');e.style.width=e.style.height=(3+Math.random()*8)+'px';p.appendChild(e)}
   if(c===3){const st=['⭐','✨','💫','🌟'];for(let i=0;i<10;i++){const s=document.createElement('div');s.className='sp';s.textContent=st[i%4];s.style.left=(20+Math.random()*60)+'%';s.style.top=(25+Math.random()*30)+'%';s.style.setProperty('--x',(-80+Math.random()*160)+'px');s.style.setProperty('--y',(-150-Math.random()*150)+'px');s.style.setProperty('--x2',(-160+Math.random()*320)+'px');s.style.setProperty('--y2',(-300-Math.random()*200)+'px');p.appendChild(s)}}
@@ -186,8 +223,8 @@ function fm(s){const h=Math.floor(s/3600),m=Math.floor(s%3600/60);return h?h+'ч
 function r2(t){return new Promise(r=>setTimeout(r,t))}
 
 qa('.tb-b').forEach(b=>b.addEventListener('click',()=>sp(b.dataset.p)));
-function sp(n){qa('.pg').forEach(p=>p.classList.remove('on'));qa('.tb-b').forEach(b=>b.classList.remove('on'));$(n).classList.add('on');q('.tb-b[data-p="'+n+'"]').classList.add('on');if(n!=='p4'&&typeof destroy3D==='function')destroy3D();lp(n);if(n==='p4'){if(!arenaInt)arenaInt=setInterval(()=>{if(q('.tb-b[data-p="p4"].on'))rA()},5000)}else{if(arenaInt){clearInterval(arenaInt);arenaInt=null}}}
-async function lp(n){if(!uid)return;try{if(n==='p1')await rP();else if(n==='p2')rG();else if(n==='p3')await rC();else if(n==='p4')await rA();else if(n==='p5')await rT()}catch(e){}}
+function sp(n){qa('.pg').forEach(p=>p.classList.remove('on'));qa('.tb-b').forEach(b=>b.classList.remove('on'));$(n).classList.add('on');q('.tb-b[data-p="'+n+'"]').classList.add('on');if(typeof BB!=='undefined'&&n!=='p4')BB.destroy();lp(n)}
+async function lp(n){if(!uid)return;try{if(n==='p1')await rP();else if(n==='p2')rG();else if(n==='p3')await rC();else if(n==='p4')rBB();else if(n==='p5')await rT()}catch(e){}}
 
 async function fP(){
   const p=await ap('/profile/'+uid+'?username='+encodeURIComponent(tg?.initDataUnsafe?.user?.username||''));
@@ -204,7 +241,7 @@ async function rP(){
   const db=p.can_claim_daily?'<button class="b b-gr" onclick="cD()">🎁 Забрать бонус</button>':'<div style="text-align:center;color:var(--tx2);font-size:13px;padding:6px">⏳ Бонус через '+fm(p.daily_cooldown)+'</div>';
   $('p1').innerHTML=mcH+'<div class=sf><div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap"><div style="background:var(--sf2);border-radius:8px;padding:10px;flex:1;min-width:80px;text-align:center"><div style="font-size:18px;font-weight:700">'+p.balance+'</div><div style="font-size:9px;color:var(--tx2)">💰 Монет</div></div><div style="background:var(--sf2);border-radius:8px;padding:10px;flex:1;min-width:80px;text-align:center"><div style="font-size:18px;font-weight:700">'+p.level+'</div><div style="font-size:9px;color:var(--tx2)">⭐ Ур.</div></div><div style="background:var(--sf2);border-radius:8px;padding:10px;flex:1;min-width:80px;text-align:center"><div style="font-size:18px;font-weight:700">'+(p.trophies||0)+'</div><div style="font-size:9px;color:var(--tx2)">🏆 Троф.</div></div><div style="background:var(--sf2);border-radius:8px;padding:10px;flex:1;min-width:80px;text-align:center"><div style="font-size:18px;font-weight:700">'+p.unique_cards+'</div><div style="font-size:9px;color:var(--tx2)">🃏 Карт</div></div><div style="background:var(--sf2);border-radius:8px;padding:10px;flex:1;min-width:80px;text-align:center"><div style="font-size:18px;font-weight:700">'+(p.battles_won||0)+'</div><div style="font-size:9px;color:var(--tx2)">⚔️ Побед</div></div><div style="background:var(--sf2);border-radius:8px;padding:10px;flex:1;min-width:80px;text-align:center"><div style="font-size:18px;font-weight:700">'+p.boxes_opened+'</div><div style="font-size:9px;color:var(--tx2)">🎁 Ящиков</div></div></div></div><div class=sf>'+db+'<div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.04)"><span style="font-size:12px;color:var(--tx2)">🔗 <b style="color:var(--tx)">'+p.referral_code+'</b></span><span style="font-size:11px;background:var(--sf2);padding:4px 10px;border-radius:6px;cursor:pointer" onclick="cR()">📋 Копировать</span></div></div>';
 }
-async function cD(){try{const r=await ap('/daily-claim/'+uid,{method:'POST'});T(r.message,'s');rP()}catch(e){T(e.message,'e')}}
+async function cD(){try{Sfx.click();const r=await ap('/daily-claim/'+uid,{method:'POST'});T(r.message,'s');rP()}catch(e){T(e.message,'e')}}
 function cR(){if(ud.referral_code){navigator.clipboard?.writeText(ud.referral_code);T('Скопировано!','s')}}
 
 function rG(){
@@ -213,9 +250,11 @@ function rG(){
   $('gb').onclick=dG;
 }
 async function dG(){
+  Sfx.box();
   const b=$('gb'),r=$('gR');b.classList.remove('sh');void b.offsetWidth;b.classList.add('sh');r.innerHTML='<div class=ld style=padding:12px><div class=spn></div></div>';
   try{
     const o=await ap('/open-box/'+uid,{method:'POST'});const c=o.card;const ri=_ri(c.rarity);
+    if(ri===3){Sfx.legendary()}else if(ri===2){Sfx.epic()}else if(ri===1){Sfx.rare()}
     setTimeout(()=>{b.classList.remove('sh');Pt(ri);$('bal').textContent=o.balance_after;if(o.free_boxes_after>0){$('fb').style.display='inline';$('fc').textContent=o.free_boxes_after}else $('fb').style.display='none';ud.balance=o.balance_after;ud.free_boxes=o.free_boxes_after;r.innerHTML='<div class=cr style=text-align:center><div class="cw '+_gr(ri)+'"><span class=be>'+c.emoji+'</span><div class="nm '+_id(ri)+'">'+c.name+'</div><div class=de>'+c.description+'</div><div><span class="bd '+_bg(ri)+'" style="color:'+(ri===3?'#0f0f22':'#fff')+'">'+c.rarity.toUpperCase()+'</span></div>'+(o.is_new?'<div style="margin-top:6px;font-size:14px;font-weight:700;color:var(--gd)">🎉 НОВАЯ КАРТА!</div>':'')+'<div class="cl '+_bg(ri)+'"></div></div><div style="font-size:12px;color:var(--tx2);margin-top:6px">💰 '+o.balance_after+' монет'+(o.free_boxes_after?' | 🎁 '+o.free_boxes_after+' бесплатно':'')+'</div></div>';if(o.is_new&&ri===3)T('🔥 ЛЕГЕНДАРНАЯ КАРТА!','s')},600)
   }catch(e){b.classList.remove('sh');r.innerHTML='<div style="text-align:center;color:var(--rd);padding:16px">❌ '+e.message+'</div>'}
 }
@@ -233,134 +272,25 @@ async function iC(id){
 }
 async function eC(id){try{const r=await ap('/set-main-card/'+uid+'/'+id,{method:'POST'});T(r.message,'s');qa('.md').forEach(m=>m.remove());rC();if(q('.tb-b[data-p="p1"].on'))rP()}catch(e){T(e.message,'e')}}
 
-// ── Arena ──
-
-let arenaTimer = null;
-
-async function rA(){
-  try{
-    const s=await ap('/arena/status/'+uid);
-    const state=s.state;
-    let html='';
-
-    if(arenaTimer){clearInterval(arenaTimer);arenaTimer=null}
-
-    if(state==='idle'){
-      html='<div class=sf style=text-align:center><div style="font-size:48px;margin-bottom:8px">🏟️</div><div style="font-size:16px;font-weight:700;margin-bottom:4px">Королевская битва</div><div style="font-size:12px;color:var(--tx2);margin-bottom:12px">Подготовка арены...</div><div class="spn" style="margin:0 auto 8px"></div><div style="display:flex;justify-content:center"><button class="b b-g" onclick="rA()" style="margin:0 auto">🔄 Проверить снова</button></div></div>';
-      $('p4').innerHTML=html;return;
-    }
-
-    if(state==='waiting_join'){
-      let cdHtml='';
-      if(s.countdown>0&&s.players>=2){
-        let r=s.countdown;
-        cdHtml='<div class=acd id=acd><div class=acd-n id=acdN>'+r+'</div><div class=acd-l>до начала битвы</div><div class=acd-b><div class=acd-b-f id=acdB style="width:'+(r/50*100)+'%"></div></div></div>';
-        arenaTimer=setInterval(function(){
-          r--;const ne=$('acdN'),be=$('acdB');
-          if(ne){ne.textContent=Math.max(0,r);ne.classList.remove('p');void ne.offsetWidth;ne.classList.add('p')}
-          if(be){be.style.width=Math.max(0,(r/50*100))+'%'}
-          if(r<=0){clearInterval(arenaTimer);arenaTimer=null;rA()}
-        },1000);
-      }
-      html='<div class=sf style=text-align:center>'
-        +'<div style="font-size:16px;font-weight:700;margin-bottom:2px">🏟️ Королевская битва</div>'
-        +'<div style="font-size:12px;color:var(--tx2);margin-bottom:6px">Ожидание игроков</div>'
-        +'<div class=ap-count>'+s.players+' / '+s.max_players+'</div>'
-        +cdHtml
-        +'<div style="display:flex;justify-content:center;margin:8px 0"><button class="b b-d" onclick="joinArena()" style="font-size:16px;padding:14px 40px">⚔️ Вступить</button></div>'
-        +'<div style="font-size:11px;color:var(--tx2)">Последний выживший побеждает!</div></div>';
-      $('p4').innerHTML=html;return;
-    }
-
-    // in_progress — Block Blast game mode
-    if(state==='in_progress'){
-      if(typeof BB !== 'undefined' && !$('bbCanvas')){
-        html='<div class=sf style=text-align:center><div style="font-weight:700;font-size:14px;margin-bottom:2px">🏟️ Арена #'+s.arena_id+' 🧩 Блок Бласт</div><div style="font-size:11px;color:var(--tx2);margin-bottom:4px">👥 '+s.alive_count+' игроков | Собери наибольший счёт!</div></div>';
-        html+='<div class=sf style="padding:4px" id=bbContainer></div>';
-        $('p4').innerHTML=html;
-        setTimeout(function(){
-          const c=$('bbContainer');
-          if(c) BB.init(c, 120, function(score){
-            ap('/arena/submit-score/'+s.arena_id+'/'+uid+'/'+score,{method:'POST'}).then(function(r){
-              T('✅ Счёт отправлен: '+score,'s');
-              setTimeout(rA,2000);
-            }).catch(function(e){
-              T('❌ '+e.message,'e');
-            });
-          });
-        }, 100);
-      }else if($('bbCanvas')){
-      }
-      return;
-    }
-    const snap=s.snapshot||{};
-    html='<div class=sf style=text-align:center><div style="font-size:16px;font-weight:700">🏟️ Арена #'+s.arena_id+'</div><div style="font-size:12px;color:var(--tx2)">'+(state==='in_progress'?'🔴 Бой идёт!':'🟡 Ожидание')+' | Раунд '+(s.round||0)+'</div><div style="display:flex;justify-content:center;gap:16px;margin:4px 0;font-size:13px"><span>👥 <b>'+s.alive_count+'</b>/'+s.total+'</span></div>';
-    if(s.countdown>0){
-      let r=s.countdown;
-      html+='<div class=acd style="margin:4px auto"><div class=acd-n style="font-size:40px" id=acdN2>'+r+'</div><div class=acd-l>до начала битвы</div><div class=acd-b><div class=acd-b-f id=acdB2 style="width:'+(r/50*100)+'%"></div></div></div>';
-      arenaTimer=setInterval(function(){
-        r--;const ne=$('acdN2'),be=$('acdB2');
-        if(ne){ne.textContent=Math.max(0,r);ne.classList.remove('p');void ne.offsetWidth;ne.classList.add('p')}
-        if(be){be.style.width=Math.max(0,(r/50*100))+'%'}
-        if(r<=0){clearInterval(arenaTimer);arenaTimer=null;rA()}
-      },1000);
-    }
-    // Map (fallback)
-    html+='<div class=sf style="padding:8px"><div class=arena-map id=arenaMap>';
-    for(const p of s.players||[]){
-      const al=p.state==='alive';const me=p.telegram_id===uid;
-      html+='<div class="arena-dot '+(al?'alive':'dead')+'" style="left:'+(p.pos_x||50)+'%;top:'+(p.pos_y||50)+'%;'+(me?'border:2px solid var(--gd)':'')+'" title="'+p.username+'">'+(p.emoji||'💀')+'</div>';
-    }
-    html+='</div></div>';
-    // Player list
-    html+='<div class=sf><div style="font-weight:700;font-size:13px;margin-bottom:4px">👥 Игроки</div>';
-    for(const p of s.players||[]){
-      const al=p.state==='alive';const me=p.telegram_id===uid;const hpPct=p.max_hp>0?(p.hp/p.max_hp*100):0;
-      html+='<div style="display:flex;align-items:center;gap:5px;padding:2px 0;font-size:12px;'+(me?'color:var(--gd)':'')+'">';
-      html+='<span>'+(p.emoji||'💀')+'</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+p.username+'</span>';
-      if(al){html+='<div style="width:36px;height:5px;background:var(--sf2);border-radius:3px;overflow:hidden"><div style="width:'+hpPct+'%;height:100%;background:'+(hpPct>60?'var(--gr)':hpPct>30?'var(--or)':'var(--rd)')+';border-radius:3px"></div></div><span style="font-size:10px;color:var(--tx2)">❤️'+p.hp+'</span>'}
-      else{html+='<span style="color:var(--tx2)">💀 Устранён'+(p.elimination_round?' р.'+p.elimination_round:'')+'</span>'}
-      html+='</div>';
-    }
-    html+='</div>';
-    // Round log
-    if(snap.actions&&snap.actions.length>0){
-      html+='<div class=sf><div style="font-weight:700;font-size:13px;margin-bottom:4px">📊 Раунд '+snap.round+'</div>';
-      for(const a of snap.actions){
-        html+='<div style="display:flex;align-items:center;gap:4px;font-size:11px;padding:2px 0;border-bottom:1px solid rgba(255,255,255,.04)"><span>⚡</span><span><b>'+a.attacker_name+'</b> → <b>'+a.target_name+'</b> <span style="color:var(--rd)">-'+a.damage+'</span></span></div>';
-      }
-      if(snap.eliminated&&snap.eliminated.length>0){html+='<div style="margin:3px 0;font-size:11px;color:var(--rd)">💀 Выбыли: '+snap.eliminated.map(function(e){return e.username}).join(', ')+'</div>'}
-      html+='</div>';
-    }
-    // Winner overlay
-    if(snap.finished||state==='finished'){
-      const w=s.winner||snap.winner||{};
-      html+='<div class=sf style=text-align:center><div style="font-size:14px;font-weight:700;color:var(--gd)">🏆 Победитель: '+w.username+'</div>';
-      if(snap.scores){
-        const sorted=Object.entries(snap.scores).sort(function(a,b){return b[1]-a[1]});
-        const players=s.players||[];
-        html+='<div style="margin:6px 0;font-size:11px;color:var(--tx2)">📊 Результаты:</div>';
-        sorted.forEach(function(e,i){
-          const tgId=parseInt(e[0]),sc=e[1];
-          const p=players.find(function(x){return x.telegram_id===tgId});
-          const nm=p?p.username:'ID'+tgId;
-          const em=p?p.emoji:'❓';
-          const med=['🥇','🥈','🥉'][i]||'';
-          html+='<div style="display:flex;align-items:center;gap:4px;padding:3px 8px;font-size:12px;'+(i===0?'color:var(--gd);font-weight:700':'')+'">'+med+' '+em+' <span style="flex:1;text-align:left">'+nm+'</span><span style="font-weight:700">'+sc+'</span></div>';
-        });
-      }
-      html+='<div style="font-size:11px;color:var(--tx2);margin-top:4px">Новая игра начнётся скоро!</div></div>';
-    }
-    $('p4').innerHTML=html;
-  }catch(e){$('p4').innerHTML='<div class=sf style="text-align:center;padding:24px"><div style="color:var(--rd)">❌ '+e.message+'</div></div>'}
+// ── Block Blast ──
+let bbActive=false;
+function rBB(){
+  const hs=parseInt(localStorage.getItem('bb_highscore')||'0');
+  if(bbActive){$('p4').innerHTML='<div id=bbContainer></div>';return}
+  $('p4').innerHTML='<div class=sf style=text-align:center><div style="font-size:48px;margin-bottom:4px">🧩</div><div style="font-size:18px;font-weight:700;margin-bottom:2px">Блок Бласт</div><div style="font-size:12px;color:var(--tx2);margin-bottom:8px">Собери наибольший счёт!</div>'+(hs>0?'<div style="font-size:13px;color:var(--gd);margin-bottom:8px">🏆 Рекорд: <b>'+hs+'</b></div>':'')+'<button class="b b-g bb-btn" onclick="startBB()">▶ Играть</button></div>'
 }
-
-async function joinArena(){
-  try{
-    const r=await ap('/arena/join/'+uid,{method:'POST'});
-    T('✅ Вы на арене!','s');rA();
-    if(r.players>=r.max_players)T('🔴 Бой начинается!','s');
-  }catch(e){T('❌ '+e.message,'e')}
+function startBB(){
+  bbActive=true;
+  $('p4').innerHTML='<div id=bbContainer></div>';
+  setTimeout(function(){
+    const c=$('bbContainer');
+    if(c) BB.init(c, 0, function(score){
+      const hs=parseInt(localStorage.getItem('bb_highscore')||'0');
+      if(score>hs)localStorage.setItem('bb_highscore',score);
+      bbActive=false;
+      rBB();
+    });
+  },100);
 }
 
 async function rT(){
@@ -374,3 +304,5 @@ async function rT(){
 if(!uid){$('ld').innerHTML='<div class=sf style="text-align:center;padding:48px 16px"><div style="font-size:64px;margin-bottom:12px">⚔️</div><h2 style="margin-bottom:4px">Gacha Battle</h2><p style="color:var(--tx2)">Запусти бота в Telegram!</p></div>'}
 else{fP().then(()=>{sp('p1');$('ld').style.display='none'}).catch(e=>{$('ld').innerHTML='<div class=sf style="text-align:center;padding:48px"><p style="color:var(--rd)">❌ '+e.message+'</p></div>'})}
 </script>
+</body>
+</html>

@@ -34,11 +34,12 @@ const BB = {
 
   init(container, timeLimit, onEnd) {
     this.container = container;
-    this.maxTime = timeLimit || 120;
+    this.maxTime = timeLimit || 0;
     this.onEnd = onEnd;
     this.score = 0;
     this.gameOver = false;
     this.timer = this.maxTime;
+    this.hasTimer = this.maxTime > 0;
     this.dragPiece = null;
     this.pieces = [];
     this.pieceColors = [];
@@ -50,7 +51,8 @@ const BB = {
     const cw = this.CELL * this.COLS + 12;
     const ch = this.CELL * this.ROWS + 12 + 160;
 
-    container.innerHTML = `<div class=bb-wrap style="display:flex;flex-direction:column;align-items:center;padding:6px"><div class=bb-hdr style="display:flex;justify-content:space-between;width:${cw}px;padding:4px 8px;margin-bottom:4px"><span style="font-size:15px;font-weight:700">\uD83E\uDE99 ${this.maxTime}s</span><span style="font-size:15px;font-weight:700;color:var(--gd)">\uD83C\uDFAF 0</span></div><canvas id=bbCanvas width=${cw} height=${ch} style="border-radius:10px;touch-action:none;cursor:pointer"></canvas></div>`;
+    const timerHtml = this.hasTimer ? `<span style="font-size:15px;font-weight:700">\uD83E\uDE99 ${this.maxTime}s</span>` : '<span style="font-size:15px;font-weight:700;color:var(--gd)">\u221E</span>';
+    container.innerHTML = `<div class=bb-wrap style="display:flex;flex-direction:column;align-items:center;padding:6px"><div class=bb-hdr style="display:flex;justify-content:space-between;width:${cw}px;padding:4px 8px;margin-bottom:4px">${timerHtml}<span style="font-size:15px;font-weight:700;color:var(--gd)">\uD83C\uDFAF 0</span></div><canvas id=bbCanvas width=${cw} height=${ch} style="border-radius:10px;touch-action:none;cursor:pointer"></canvas></div>`;
 
     this.canvas = container.querySelector('#bbCanvas');
     this.ctx = this.canvas.getContext('2d');
@@ -73,6 +75,7 @@ const BB = {
   },
 
   startTimer() {
+    if(!this.hasTimer) return;
     this._timerInt = setInterval(() => {
       this.timer--;
       const el = this.container.querySelector('.bb-hdr span:first-child');
@@ -93,6 +96,11 @@ const BB = {
       const idx = Math.floor(Math.random() * this.SHAPES.length);
       this.pieces.push(this.SHAPES[idx].map(p => [...p]));
       this.pieceColors.push(this.COLORS[Math.floor(Math.random() * this.COLORS.length)]);
+    }
+    if(!this.canAnyPlace()) {
+      this.gameOver = true;
+      clearInterval(this._timerInt);
+      if(this.onEnd) setTimeout(() => this.onEnd(this.score), 300);
     }
   },
 
@@ -352,16 +360,24 @@ const BB = {
     }
 
     if(this.gameOver) {
-      ctx.fillStyle = 'rgba(0,0,0,.6)';
+      ctx.fillStyle = 'rgba(0,0,0,.65)';
       ctx.fillRect(0, 0, cw, ch);
-      ctx.fillStyle = '#fbbf24';
-      ctx.font = 'bold 28px sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('\uD83C\uDFAF ' + this.score, cw/2, ch/2 - 10);
-      ctx.fillStyle = 'rgba(255,255,255,.5)';
-      ctx.font = '16px sans-serif';
-      ctx.fillText('\u0418\u0433\u0440\u0430 \u043e\u043a\u043e\u043d\u0447\u0435\u043d\u0430', cw/2, ch/2 + 30);
+      ctx.fillStyle = '#fbbf24';
+      ctx.font = 'bold 36px sans-serif';
+      ctx.fillText('\uD83C\uDFAF', cw/2, ch/2 - 40);
+      ctx.font = 'bold 32px sans-serif';
+      ctx.fillText('' + this.score, cw/2, ch/2 + 10);
+      ctx.fillStyle = 'rgba(255,255,255,.4)';
+      ctx.font = '14px sans-serif';
+      ctx.fillText('\u0418\u0433\u0440\u0430 \u043e\u043a\u043e\u043d\u0447\u0435\u043d\u0430', cw/2, ch/2 + 50);
+      const hs = parseInt(localStorage.getItem('bb_highscore')||'0');
+      if(this.score >= hs && this.score > 0) {
+        ctx.fillStyle = '#fbbf24';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillText('\uD83C\uDFC6 \u041D\u041E\u0412\u042B\u0419 \u0420\u0415\u041A\u041E\u0420\u0414!', cw/2, ch/2 + 80);
+      }
     }
   },
 

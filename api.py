@@ -1,24 +1,17 @@
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
 import uvicorn
-import json
-import logging
 from pathlib import Path
-
-logger = logging.getLogger(__name__)
 
 from database import Database
 from config import API_HOST, API_PORT, WEBAPP_URL, RARITIES, STARS_PACKAGES
 from characters import CHARACTERS as ALL_CHARS
-from arena import ArenaManager
-from arena_game import game_server
 
 app = FastAPI(title="Gacha Battle API")
 db = Database()
-arena_manager = None
 
 app.add_middleware(
     CORSMiddleware,
@@ -257,71 +250,6 @@ async def get_progress(telegram_id: int):
     if not result:
         raise HTTPException(status_code=400, detail="Пользователь не найден")
     return result
-
-
-# ── Arena ──
-
-@app.post("/arena/join/{telegram_id}")
-async def arena_join(telegram_id: int):
-    if not arena_manager:
-        raise HTTPException(status_code=503, detail="Арена не активна")
-    result, error = await arena_manager.join(telegram_id)
-    if error:
-        raise HTTPException(status_code=400, detail=error)
-    return result
-
-
-@app.get("/arena/status/{telegram_id}")
-async def arena_status(telegram_id: int):
-    if not arena_manager:
-        return {"state": "idle"}
-    return await arena_manager.get_status(telegram_id)
-
-
-@app.get("/arena/list")
-async def arena_list():
-    if not arena_manager:
-        return {"has_open": False, "players": 0, "max_players": 10}
-    return await arena_manager.get_open_arena_info()
-
-
-@app.post("/arena/submit-score/{arena_id}/{telegram_id}/{score}")
-async def arena_submit_score(arena_id: int, telegram_id: int, score: int):
-    if not arena_manager:
-        raise HTTPException(status_code=503, detail="Арена не активна")
-    result, error = await arena_manager.submit_score(arena_id, telegram_id, score)
-    if error:
-        raise HTTPException(status_code=400, detail=error)
-    return result
-
-
-@app.websocket("/arena/ws/{arena_id}/{telegram_id}")
-async def arena_ws(websocket: WebSocket, arena_id: int, telegram_id: int):
-    await websocket.accept()
-    from database import Database
-    db = Database()
-    await db.connect()
-    session = game_server.get_or_create(arena_id)
-    user = await db.get_user(telegram_id)
-    if user and telegram_id not in session.players:
-        mc = await db.get_main_card(telegram_id)
-        session.add_player(telegram_id, user.get("username", f"ID{telegram_id}"), mc.get("emoji", "\U0001f916") if mc else "\U0001f916", user["id"])
-    session.connections[telegram_id] = websocket
-    try:
-        while True:
-            data = await websocket.receive_text()
-            msg = json.loads(data)
-            session.handle_input(telegram_id, msg)
-    except WebSocketDisconnect:
-        pass
-    except Exception as e:
-        logger.error(f"WS error: {e}")
-    finally:
-        session.connections.pop(telegram_id, None)
-        if arena_id in game_server.sessions:
-            alive = [p for p in session.players.values() if p.alive]
-            if len(alive) <= 1 and session.running:
-                session.running = False
 
 
 def run_api():
