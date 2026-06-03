@@ -68,6 +68,16 @@ MISSION_TYPES = [
 # Level thresholds (cumulative trophies needed)
 LEVEL_THRESHOLDS = [0, 30, 70, 130, 210, 320, 460, 630, 840, 1100, 1500]
 
+# Block Blast rating milestones (threshold → boxes reward)
+BB_MILESTONES = [
+    (100000, 5),
+    (200000, 5),
+    (300000, 5),
+    (500000, 10),
+    (750000, 10),
+    (1000000, 15),
+]
+
 # Arena (Battle Royale)
 ARENA_SIZE = 10
 ARENA_CYCLE_MINUTES = 5

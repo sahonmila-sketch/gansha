@@ -204,6 +204,24 @@ const Sfx = {
   click() {
     this._init(); const t = this._ctx.currentTime;
     this._osc(800, t, 0.02, 0.1, 'square');
+  },
+  place() {
+    this._init(); const t = this._ctx.currentTime;
+    this._osc(300, t, 0.05, 0.12, 'sine');
+    this._osc(450, t + 0.03, 0.05, 0.08, 'sine');
+  },
+  clearLine() {
+    this._init(); const t = this._ctx.currentTime;
+    for(let i = 0; i < 5; i++) this._osc(500 + i * 120, t + i * 0.04, 0.08, 0.08, 'sine');
+  },
+  gameOver() {
+    this._init(); const t = this._ctx.currentTime;
+    for(let i = 0; i < 3; i++) this._osc(400 - i * 100, t + i * 0.2, 0.2, 0.15, 'triangle');
+  },
+  milestone() {
+    this._init(); const t = this._ctx.currentTime;
+    for(let i = 0; i < 6; i++) this._osc(400 + i * 150, t + i * 0.08, 0.12, 0.15, 'sine');
+    this._osc(1300, t + 0.5, 0.3, 0.2, 'triangle');
   }
 };
 
@@ -273,11 +291,24 @@ async function iC(id){
 async function eC(id){try{const r=await ap('/set-main-card/'+uid+'/'+id,{method:'POST'});T(r.message,'s');qa('.md').forEach(m=>m.remove());rC();if(q('.tb-b[data-p="p1"].on'))rP()}catch(e){T(e.message,'e')}}
 
 // ── Block Blast ──
-let bbActive=false;
-function rBB(){
+let bbActive=false, bbRating=0;
+async function rBB(){
   const hs=parseInt(localStorage.getItem('bb_highscore')||'0');
   if(bbActive){$('p4').innerHTML='<div id=bbContainer></div>';return}
-  $('p4').innerHTML='<div class=sf style=text-align:center><div style="font-size:48px;margin-bottom:4px">🧩</div><div style="font-size:18px;font-weight:700;margin-bottom:2px">Блок Бласт</div><div style="font-size:12px;color:var(--tx2);margin-bottom:8px">Собери наибольший счёт!</div>'+(hs>0?'<div style="font-size:13px;color:var(--gd);margin-bottom:8px">🏆 Рекорд: <b>'+hs+'</b></div>':'')+'<button class="b b-g bb-btn" onclick="startBB()">▶ Играть</button></div>'
+  try{const d=await ap('/bb-data/'+uid);bbRating=d.rating||0}catch(e){}
+  let mh='';
+  if(bbRating>0){
+    const next=d&&d.next_milestone?d.next_milestone:null;
+    const pct=next?Math.min(100,(bbRating/next.threshold)*100):0;
+    mh='<div class=sf><div style="display:flex;justify-content:space-between;font-size:12px;padding:0 2px 4px"><span>⭐ Рейтинг: <b>'+bbRating+'</b></span><span style=color:var(--tx2)>🏆 Рекорд: '+hs+'</span></div>';
+    if(next)mh+='<div style="display:flex;align-items:center;gap:6px;font-size:11px"><span style=color:var(--tx2)>'+bbRating+'</span><div class=ho><div class="hi h" style="width:'+pct+'%"></div></div><span style=color:var(--gd);font-weight:700>'+next.threshold+'</span></div><div style=font-size:10px;color:var(--tx2);text-align:center;margin-top:2px>🎁 '+next.reward+' ящиков</div>';
+    mh+='</div>'
+    if(d&&d.unclaimed&&d.unclaimed.length){mh+='<div class=sf style=text-align:center>';for(const t of d.unclaimed){const r=d.milestones.find(m=>m.threshold===t);mh+='<button class="b b-g b-sm" onclick="cBM('+t+')" style=margin:2px>🎁 '+t.toLocaleString()+' — '+(r?r.reward:'?')+' ящиков</button>'}mh+='</div>'}
+  }
+  $('p4').innerHTML=mh+'<div class=sf style=text-align:center><div style="font-size:48px;margin-bottom:4px">🧩</div><div style="font-size:18px;font-weight:700;margin-bottom:2px">Блок Бласт</div><div style="font-size:12px;color:var(--tx2);margin-bottom:8px">Собери наибольший счёт!</div>'+(hs>0?'<div style="font-size:13px;color:var(--gd);margin-bottom:8px">🏆 Рекорд: <b>'+hs+'</b></div>':'')+'<button class="b b-g bb-btn" onclick="startBB()">▶ Играть</button></div>'
+}
+async function cBM(t){
+  try{const r=await ap('/claim-bb-milestone/'+uid+'/'+t,{method:'POST'});T('🎁 Получено '+r.reward,'s');await fP();rBB()}catch(e){T(e.message,'e')}
 }
 function startBB(){
   bbActive=true;
@@ -288,7 +319,18 @@ function startBB(){
       const hs=parseInt(localStorage.getItem('bb_highscore')||'0');
       if(score>hs)localStorage.setItem('bb_highscore',score);
       bbActive=false;
-      rBB();
+      (async()=>{
+        try{
+          const r=await ap('/submit-bb-score/'+uid,{method:'POST',body:JSON.stringify({score})});
+          if(r.new_milestones&&r.new_milestones.length){
+            Sfx.milestone();
+            let txt='';
+            for(const m of r.new_milestones)txt+='🎯 '+m.threshold.toLocaleString()+' → 🎁 +'+m.reward+' ящиков\n';
+            T(txt,'s');
+          }
+        }catch(e){}
+        rBB();
+      })();
     });
   },100);
 }

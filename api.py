@@ -36,6 +36,10 @@ class StarsPurchaseRequest(BaseModel):
     package_index: int
 
 
+class BBScoreRequest(BaseModel):
+    score: int
+
+
 @app.on_event("startup")
 async def startup():
     await db.connect()
@@ -145,6 +149,32 @@ async def rarities():
 @app.get("/packages")
 async def packages():
     return STARS_PACKAGES
+
+
+# ── Block Blast ──
+
+@app.post("/submit-bb-score/{telegram_id}")
+async def submit_bb_score(telegram_id: int, req: BBScoreRequest):
+    result, error = await db.submit_bb_score(telegram_id, req.score)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+    return result
+
+
+@app.get("/bb-data/{telegram_id}")
+async def get_bb_data(telegram_id: int):
+    result = await db.get_bb_data(telegram_id)
+    if not result:
+        raise HTTPException(status_code=400, detail="Пользователь не найден")
+    return result
+
+
+@app.post("/claim-bb-milestone/{telegram_id}/{threshold}")
+async def claim_bb_milestone(telegram_id: int, threshold: int):
+    result, error = await db.claim_bb_milestone(telegram_id, threshold)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+    return result
 
 
 # ── Missions ──

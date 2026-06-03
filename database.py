@@ -8,6 +8,7 @@ from typing import Optional
 from config import DB_PATH, DATABASE_URL, RARITIES, DAILY_BONUS, BOX_PRICE, INITIAL_BALANCE, REFERRAL_BONUS
 from config import BATTLES_PER_DAY, BATTLE_WIN_BOXES, BATTLE_WIN_TROPHIES, BATTLE_LOSE_COINS, BATTLE_LOSE_TROPHIES, BATTLE_EXTRA_COST, BATTLE_MAX_ROUNDS
 from config import EQUIP_SLOTS, ENEMY_RARITY_WEIGHTS, MISSIONS_PER_DAY, MISSION_TYPES, LEVEL_THRESHOLDS
+from config import BB_MILESTONES
 from characters import CHARACTERS, CARD_STATS_BASE, CARD_STATS_PER_LEVEL, RARITY_SPECIALS
 
 
@@ -111,6 +112,10 @@ class Database:
             conn = await asyncpg.connect(DATABASE_URL)
             self.db = _PGConnection(conn)
             await self._create_tables_pg()
+            try:
+                await self.db.execute("ALTER TABLE users ADD COLUMN bb_rating INTEGER DEFAULT 0")
+            except Exception:
+                pass
         else:
             self.db = await aiosqlite.connect(DB_PATH)
             self.db.row_factory = aiosqlite.Row
@@ -246,6 +251,15 @@ class Database:
             );
             CREATE INDEX IF NOT EXISTS idx_arena_players_arena ON arena_players(arena_id);
             CREATE INDEX IF NOT EXISTS idx_arena_players_tg ON arena_players(telegram_id);
+            CREATE TABLE IF NOT EXISTS bb_milestones (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                milestone INTEGER NOT NULL,
+                claimed INTEGER DEFAULT 0,
+                claimed_at TIMESTAMP,
+                UNIQUE(user_id, milestone)
+            );
+            CREATE INDEX IF NOT EXISTS idx_bb_milestones_user ON bb_milestones(user_id);
         """)
 
     async def _create_tables(self):
@@ -379,6 +393,16 @@ class Database:
             );
             CREATE INDEX IF NOT EXISTS idx_arena_players_arena ON arena_players(arena_id);
             CREATE INDEX IF NOT EXISTS idx_arena_players_tg ON arena_players(telegram_id);
+            CREATE TABLE IF NOT EXISTS bb_milestones (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                milestone INTEGER NOT NULL,
+                claimed INTEGER DEFAULT 0,
+                claimed_at TEXT,
+                UNIQUE(user_id, milestone),
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_bb_milestones_user ON bb_milestones(user_id);
         """)
 
     async def _migrate(self):
@@ -398,6 +422,10 @@ class Database:
                 await self.db.execute(f"ALTER TABLE users ADD COLUMN {name} {dtype}")
             except aiosqlite.OperationalError:
                 pass
+        try:
+            await self.db.execute("ALTER TABLE users ADD COLUMN bb_rating INTEGER DEFAULT 0")
+        except aiosqlite.OperationalError:
+            pass
         for col in ['balance', 'boxes_opened', 'free_boxes', 'trophies', 'battles_won', 'battles_total', 'level']:
             await self.db.execute(f"UPDATE users SET {col} = CAST(COALESCE(NULLIF({col}, ''), '0') AS INTEGER) WHERE {col} IS NULL OR {col} = '' OR typeof({col}) = 'text'")
         await self.db.execute("UPDATE users SET level = CAST(COALESCE(NULLIF(level, ''), '1') AS INTEGER) WHERE level IS NULL OR level = '' OR typeof(level) = 'text'")
@@ -483,7 +511,7 @@ class Database:
         return {**card, "level": level, **stats}
 
     def _norm_user(self, user: dict) -> dict:
-        for field in ['balance', 'boxes_opened', 'free_boxes', 'trophies', 'battles_won', 'battles_total', 'level']:
+        for field in ['balance', 'boxes_opened', 'free_boxes', 'trophies', 'battles_won', 'battles_total', 'level', 'bb_rating']:
             val = user.get(field)
             user[field] = int(val) if val is not None else 0
         return user
@@ -1321,3 +1349,114 @@ class Database:
             "progress_pct": round(progress, 1),
             "next_at": next_threshold,
         }
+
+    # ── Block Blast Rating ──
+
+    async def get_bb_data(self, telegram_id: int):
+        user = await self.get_user(telegram_id)
+        if not user:
+            return None
+        rating = user.get("bb_rating", 0)
+        cursor = await self.db.execute(
+            "SELECT milestone FROM bb_milestones WHERE user_id = ? AND claimed = 0",
+            (user["id"],)
+        )
+        rows = await cursor.fetchall()
+        unclaimed = [r["milestone"] for r in rows] if rows else []
+
+        milestones = []
+        for threshold, boxes in BB_MILESTONES:
+            cursor = await self.db.execute(
+                "SELECT claimed FROM bb_milestones WHERE user_id = ? AND milestone = ?",
+                (user["id"], threshold)
+            )
+            row = await cursor.fetchone()
+            is_claimed = row is not None and row["claimed"] == 1
+            milestones.append({
+                "threshold": threshold,
+                "reward": boxes,
+                "claimed": is_claimed,
+                "reached": rating >= threshold,
+            })
+
+        next_m = None
+        for m in milestones:
+            if not m["reached"]:
+                next_m = m
+                break
+
+        return {
+            "rating": rating,
+            "unclaimed": unclaimed,
+            "milestones": milestones,
+            "next_milestone": next_m,
+        }
+
+    async def submit_bb_score(self, telegram_id: int, score: int):
+        user = await self.get_user(telegram_id)
+        if not user:
+            return None, "Пользователь не найден"
+
+        await self.db.execute(
+            "UPDATE users SET bb_rating = COALESCE(bb_rating, 0) + ? WHERE telegram_id = ?",
+            (score, telegram_id)
+        )
+        await self.db.commit()
+
+        user = await self.get_user(telegram_id)
+        new_rating = user.get("bb_rating", 0)
+
+        new_milestones = []
+        for threshold, boxes in BB_MILESTONES:
+            if new_rating >= threshold:
+                cursor = await self.db.execute(
+                    "SELECT id FROM bb_milestones WHERE user_id = ? AND milestone = ?",
+                    (user["id"], threshold)
+                )
+                existing = await cursor.fetchone()
+                if not existing:
+                    if self._is_pg:
+                        await self.db.execute(
+                            "INSERT INTO bb_milestones (user_id, milestone) VALUES ($1, $2)",
+                            (user["id"], threshold)
+                        )
+                    else:
+                        await self.db.execute(
+                            "INSERT INTO bb_milestones (user_id, milestone) VALUES (?, ?)",
+                            (user["id"], threshold)
+                        )
+                    new_milestones.append({"threshold": threshold, "reward": boxes})
+                    await self.db.commit()
+
+        return {"rating": new_rating, "new_milestones": new_milestones}, None
+
+    async def claim_bb_milestone(self, telegram_id: int, threshold: int):
+        user = await self.get_user(telegram_id)
+        if not user:
+            return None, "Пользователь не найден"
+
+        cursor = await self.db.execute(
+            "SELECT id FROM bb_milestones WHERE user_id = ? AND milestone = ? AND claimed = 0",
+            (user["id"], threshold)
+        )
+        row = await cursor.fetchone()
+        if not row:
+            return None, "Награда уже получена или не достигнута"
+
+        boxes = 0
+        for t, b in BB_MILESTONES:
+            if t == threshold:
+                boxes = b
+                break
+
+        await self.db.execute(
+            "UPDATE bb_milestones SET claimed = 1 WHERE id = ?",
+            (row["id"],)
+        )
+        await self.db.execute(
+            "UPDATE users SET free_boxes = free_boxes + ? WHERE telegram_id = ?",
+            (boxes, telegram_id)
+        )
+        await self.db.commit()
+
+        return {"reward": f"{boxes} ящиков", "boxes_added": boxes}, None

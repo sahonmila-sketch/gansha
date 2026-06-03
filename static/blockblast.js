@@ -83,6 +83,7 @@ const BB = {
       if(this.timer <= 0) {
         clearInterval(this._timerInt);
         this.gameOver = true;
+        if(typeof Sfx !== 'undefined') Sfx.gameOver();
         this.draw();
         if(this.onEnd) setTimeout(() => this.onEnd(this.score), 500);
       }
@@ -100,6 +101,7 @@ const BB = {
     if(!this.canAnyPlace()) {
       this.gameOver = true;
       clearInterval(this._timerInt);
+      if(typeof Sfx !== 'undefined') Sfx.gameOver();
       if(this.onEnd) setTimeout(() => this.onEnd(this.score), 300);
     }
   },
@@ -118,6 +120,8 @@ const BB = {
       this.grid[gridRow + r][gridCol + c] = color;
     }
     const cleared = this.checkClears();
+    if(cleared > 0) { if(typeof Sfx !== 'undefined') Sfx.clearLine(); }
+    else { if(typeof Sfx !== 'undefined') Sfx.place(); }
     this.score += cleared * 10 + (cleared > 1 ? cleared * 5 : 0);
     const sEl = this.container.querySelector('.bb-hdr span:last-child');
     if(sEl) sEl.textContent = `\uD83C\uDFAF ${this.score}`;
@@ -248,7 +252,7 @@ const BB = {
     const gp = this.getGridPos(this.dragOffX, this.dragOffY);
     if(gp && this.canPlace(this.dragPiece.piece, gp.row, gp.col)) {
       this.placePiece(this.dragPiece.piece, gp.row, gp.col, this.dragPiece.color);
-      if(!this.canAnyPlace()) { this.gameOver = true; clearInterval(this._timerInt); this.draw(); if(this.onEnd) setTimeout(() => this.onEnd(this.score), 500); }
+      if(!this.canAnyPlace()) { this.gameOver = true; clearInterval(this._timerInt); if(typeof Sfx !== 'undefined') Sfx.gameOver(); this.draw(); if(this.onEnd) setTimeout(() => this.onEnd(this.score), 500); }
     }
     this.dragPiece = null;
     this.draw();
