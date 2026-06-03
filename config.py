@@ -6,7 +6,11 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN", "ВАШ_ТОКЕН_ОТ_BOTFATHER")
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
 API_PORT = int(os.getenv("PORT") or os.getenv("API_PORT", "8000"))
-WEBAPP_URL = os.getenv("WEBAPP_URL", "https://your-domain.com/static/index.html")
+_railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN")
+if _railway_domain:
+    WEBAPP_URL = f"https://{_railway_domain}/static/index.html"
+else:
+    WEBAPP_URL = os.getenv("WEBAPP_URL", "https://your-domain.com/static/index.html")
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "gacha.db")
 DATABASE_URL = os.getenv("DATABASE_URL")
