@@ -285,6 +285,16 @@ async def arena_list():
     return await arena_manager.get_open_arena_info()
 
 
+@app.post("/arena/submit-score/{arena_id}/{telegram_id}/{score}")
+async def arena_submit_score(arena_id: int, telegram_id: int, score: int):
+    if not arena_manager:
+        raise HTTPException(status_code=503, detail="Арена не активна")
+    result, error = await arena_manager.submit_score(arena_id, telegram_id, score)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+    return result
+
+
 @app.websocket("/arena/ws/{arena_id}/{telegram_id}")
 async def arena_ws(websocket: WebSocket, arena_id: int, telegram_id: int):
     await websocket.accept()
