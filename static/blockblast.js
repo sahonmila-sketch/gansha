@@ -32,7 +32,9 @@ const BB = {
 
   COLORS: ['#60a5fa','#a78bfa','#fbbf24','#ef4444','#22c55e','#f97316','#ec4899','#06b6d4','#14b8a6','#eab308'],
 
-  init(container, timeLimit, onEnd) {
+  OBSTACLE_COLOR: '#1a1a2e',
+
+  init(container, timeLimit, onEnd, rating, cardBonus) {
     this.container = container;
     this.maxTime = timeLimit || 0;
     this.onEnd = onEnd;
@@ -43,6 +45,10 @@ const BB = {
     this.dragPiece = null;
     this.pieces = [];
     this.pieceColors = [];
+    this.rating = rating || 0;
+    this.cardBonus = cardBonus || 1;
+    this.obstacles = new Set();
+    this._restartBtn = null;
 
     const rect = container.getBoundingClientRect();
     const size = Math.min(rect.width - 16, 360);
@@ -51,14 +57,17 @@ const BB = {
     const cw = this.CELL * this.COLS + 12;
     const ch = this.CELL * this.ROWS + 12 + 160;
 
+    const cbHtml = this.cardBonus > 1 ? `<span style="font-size:11px;color:var(--gd);font-weight:700">\u2B50x${this.cardBonus}</span>` : '';
+    const obsHtml = this.obstacles.size > 0 ? `<span style="font-size:11px;color:var(--tx2)">\uD83D\uDEE1 ${this.obstacles.size}</span>` : '';
     const timerHtml = this.hasTimer ? `<span style="font-size:15px;font-weight:700">\uD83E\uDE99 ${this.maxTime}s</span>` : '<span style="font-size:15px;font-weight:700;color:var(--gd)">\u221E</span>';
-    container.innerHTML = `<div class=bb-wrap style="display:flex;flex-direction:column;align-items:center;padding:6px"><div class=bb-hdr style="display:flex;justify-content:space-between;width:${cw}px;padding:4px 8px;margin-bottom:4px">${timerHtml}<span style="font-size:15px;font-weight:700;color:var(--gd)">\uD83C\uDFAF 0</span></div><canvas id=bbCanvas width=${cw} height=${ch} style="border-radius:10px;touch-action:none;cursor:pointer"></canvas></div>`;
+    container.innerHTML = `<div class=bb-wrap style="display:flex;flex-direction:column;align-items:center;padding:6px"><div class=bb-hdr style="display:flex;justify-content:space-between;align-items:center;width:${cw}px;padding:4px 8px;margin-bottom:4px"><span>${timerHtml} ${cbHtml} ${obsHtml}</span><span style="font-size:15px;font-weight:700;color:var(--gd)">\uD83C\uDFAF 0</span></div><canvas id=bbCanvas width=${cw} height=${ch} style="border-radius:10px;touch-action:none;cursor:pointer"></canvas></div>`;
 
     this.canvas = container.querySelector('#bbCanvas');
     this.ctx = this.canvas.getContext('2d');
 
     this.grid = Array.from({length: this.ROWS}, () => Array(this.COLS).fill(0));
 
+    this._generateObstacles();
     this.spawnPieces();
 
     const c = this.canvas;
@@ -74,6 +83,33 @@ const BB = {
     this.startTimer();
   },
 
+  _generateObstacles() {
+    const r = this.rating;
+    const num = r < 5000 ? 0 : r < 25000 ? 3 : r < 100000 ? 6 : r < 500000 ? 10 : 15;
+    let att = 0;
+    while(this.obstacles.size < num && att < 300) {
+      const or = Math.floor(Math.random() * this.ROWS);
+      const oc = Math.floor(Math.random() * this.COLS);
+      const key = or+','+oc;
+      if(!this.obstacles.has(key)) {
+        let adj = false;
+        for(const ok of this.obstacles) {
+          const [ar, ac] = ok.split(',').map(Number);
+          if(Math.abs(ar - or) <= 1 && Math.abs(ac - oc) <= 1) { adj = true; break; }
+        }
+        if(!adj) this.obstacles.add(key);
+      }
+      att++;
+    }
+  },
+
+  restart() {
+    if(typeof Sfx !== 'undefined') Sfx.click();
+    clearTimeout(this._endTimer);
+    this.destroy();
+    this.init(this.container, this.maxTime, this.onEnd, this.rating, this.cardBonus);
+  },
+
   startTimer() {
     if(!this.hasTimer) return;
     this._timerInt = setInterval(() => {
@@ -85,7 +121,7 @@ const BB = {
         this.gameOver = true;
         if(typeof Sfx !== 'undefined') Sfx.gameOver();
         this.draw();
-        if(this.onEnd) setTimeout(() => this.onEnd(this.score), 500);
+        if(this.onEnd) this._endTimer = setTimeout(() => this.onEnd(this.score), 500);
       }
     }, 1000);
   },
@@ -102,7 +138,7 @@ const BB = {
       this.gameOver = true;
       clearInterval(this._timerInt);
       if(typeof Sfx !== 'undefined') Sfx.gameOver();
-      if(this.onEnd) setTimeout(() => this.onEnd(this.score), 300);
+      if(this.onEnd) this._endTimer = setTimeout(() => this.onEnd(this.score), 300);
     }
   },
 
@@ -111,6 +147,7 @@ const BB = {
       const nr = gridRow + r, nc = gridCol + c;
       if(nr < 0 || nr >= this.ROWS || nc < 0 || nc >= this.COLS) return false;
       if(this.grid[nr][nc] !== 0) return false;
+      if(this.obstacles.has(nr+','+nc)) return false;
     }
     return true;
   },
@@ -122,7 +159,8 @@ const BB = {
     const cleared = this.checkClears();
     if(cleared > 0) { if(typeof Sfx !== 'undefined') Sfx.clearLine(); }
     else { if(typeof Sfx !== 'undefined') Sfx.place(); }
-    this.score += cleared * 10 + (cleared > 1 ? cleared * 5 : 0);
+    const base = cleared * 10 + (cleared > 1 ? cleared * 5 : 0);
+    this.score += Math.round(base * (this.cardBonus || 1));
     const sEl = this.container.querySelector('.bb-hdr span:last-child');
     if(sEl) sEl.textContent = `\uD83C\uDFAF ${this.score}`;
     this.pieces = [];
@@ -141,8 +179,8 @@ const BB = {
       for(let r = 0; r < this.ROWS; r++) { if(this.grid[r][c] === 0) { full = false; break; } }
       if(full) cols.push(c);
     }
-    for(const r of rows) for(let c = 0; c < this.COLS; c++) this.grid[r][c] = 0;
-    for(const c of cols) for(let r = 0; r < this.ROWS; r++) this.grid[r][c] = 0;
+    for(const r of rows) for(let c = 0; c < this.COLS; c++) if(!this.obstacles.has(r+','+c)) this.grid[r][c] = 0;
+    for(const c of cols) for(let r = 0; r < this.ROWS; r++) if(!this.obstacles.has(r+','+c)) this.grid[r][c] = 0;
     cleared = rows.length + cols.length;
     if(cleared > 0) this.drawClearEffect(rows, cols);
     return cleared;
@@ -198,6 +236,17 @@ const BB = {
     e.preventDefault();
     const t = e.touches[0];
     if(e.type === 'touchstart') {
+      if(this.gameOver && this._restartBtn && t) {
+        const rect = this.canvas.getBoundingClientRect();
+        const sx = this.canvas.width / rect.width;
+        const sy = this.canvas.height / rect.height;
+        const mx = (t.clientX - rect.left) * sx;
+        const my = (t.clientY - rect.top) * sy;
+        if(mx >= this._restartBtn.x && mx <= this._restartBtn.x + this._restartBtn.w &&
+           my >= this._restartBtn.y && my <= this._restartBtn.y + this._restartBtn.h) {
+          this.restart(); return;
+        }
+      }
       const pi = this.getPieceAt(t.clientX, t.clientY);
       if(pi !== null && !this.gameOver) {
         this.dragPiece = {idx: pi, piece: this.pieces[pi].map(p => [...p]), color: this.pieceColors[pi]};
@@ -214,6 +263,17 @@ const BB = {
 
   onMouse(e) {
     if(e.type === 'mousedown') {
+      if(this.gameOver && this._restartBtn) {
+        const rect = this.canvas.getBoundingClientRect();
+        const sx = this.canvas.width / rect.width;
+        const sy = this.canvas.height / rect.height;
+        const mx = (e.clientX - rect.left) * sx;
+        const my = (e.clientY - rect.top) * sy;
+        if(mx >= this._restartBtn.x && mx <= this._restartBtn.x + this._restartBtn.w &&
+           my >= this._restartBtn.y && my <= this._restartBtn.y + this._restartBtn.h) {
+          this.restart(); return;
+        }
+      }
       const pi = this.getPieceAt(e.clientX, e.clientY);
       if(pi !== null && !this.gameOver) {
         this.dragPiece = {idx: pi, piece: this.pieces[pi].map(p => [...p]), color: this.pieceColors[pi]};
@@ -252,7 +312,7 @@ const BB = {
     const gp = this.getGridPos(this.dragOffX, this.dragOffY);
     if(gp && this.canPlace(this.dragPiece.piece, gp.row, gp.col)) {
       this.placePiece(this.dragPiece.piece, gp.row, gp.col, this.dragPiece.color);
-      if(!this.canAnyPlace()) { this.gameOver = true; clearInterval(this._timerInt); if(typeof Sfx !== 'undefined') Sfx.gameOver(); this.draw(); if(this.onEnd) setTimeout(() => this.onEnd(this.score), 500); }
+      if(!this.canAnyPlace()) { this.gameOver = true; clearInterval(this._timerInt); if(typeof Sfx !== 'undefined') Sfx.gameOver(); this.draw(); if(this.onEnd) this._endTimer = setTimeout(() => this.onEnd(this.score), 500); }
     }
     this.dragPiece = null;
     this.draw();
@@ -297,6 +357,25 @@ const BB = {
           this.drawCell(ctx, off + c * cs, off + r * cs, cs, this.grid[r][c]);
         }
       }
+    }
+
+    for(const key of this.obstacles) {
+      const [or, oc] = key.split(',').map(Number);
+      const x = off + oc * cs, y = off + or * cs;
+      ctx.fillStyle = '#1a1a2e';
+      ctx.beginPath();
+      ctx.roundRect(x + 1, y + 1, cs - 2, cs - 2, 3);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.06)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(x + 1, y + 1, cs - 2, cs - 2, 3);
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,.08)';
+      ctx.font = `${Math.floor(cs * 0.5)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('\u2716', x + cs / 2, y + cs / 2);
     }
 
     if(this._clearFlash) {
@@ -371,18 +450,29 @@ const BB = {
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#fbbf24';
       ctx.font = 'bold 36px sans-serif';
-      ctx.fillText('\uD83C\uDFAF', cw/2, ch/2 - 40);
+      ctx.fillText('\uD83C\uDFAF', cw/2, ch/2 - 50);
       ctx.font = 'bold 32px sans-serif';
-      ctx.fillText('' + this.score, cw/2, ch/2 + 10);
+      ctx.fillText('' + this.score, cw/2, ch/2);
       ctx.fillStyle = 'rgba(255,255,255,.4)';
       ctx.font = '14px sans-serif';
-      ctx.fillText('\u0418\u0433\u0440\u0430 \u043e\u043a\u043e\u043d\u0447\u0435\u043d\u0430', cw/2, ch/2 + 50);
+      ctx.fillText('\u0418\u0433\u0440\u0430 \u043e\u043a\u043e\u043d\u0447\u0435\u043d\u0430', cw/2, ch/2 + 40);
       const hs = parseInt(localStorage.getItem('bb_highscore')||'0');
       if(this.score >= hs && this.score > 0) {
         ctx.fillStyle = '#fbbf24';
         ctx.font = 'bold 16px sans-serif';
-        ctx.fillText('\uD83C\uDFC6 \u041D\u041E\u0412\u042B\u0419 \u0420\u0415\u041A\u041E\u0420\u0414!', cw/2, ch/2 + 80);
+        ctx.fillText('\uD83C\uDFC6 \u041D\u041E\u0412\u042B\u0419 \u0420\u0415\u041A\u041E\u0420\u0414!', cw/2, ch/2 + 72);
       }
+      const bx = cw/2 - 80, by = ch/2 + 105, bw = 160, bh = 42;
+      ctx.fillStyle = '#fbbf24';
+      ctx.beginPath();
+      ctx.roundRect(bx, by, bw, bh, 10);
+      ctx.fill();
+      ctx.fillStyle = '#0f0f22';
+      ctx.font = 'bold 15px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('\uD83D\uDD04 \u0417\u0430\u043D\u043E\u0432\u043E', cw/2, by + bh/2);
+      this._restartBtn = {x: bx, y: by, w: bw, h: bh};
     }
   },
 
@@ -417,6 +507,8 @@ const BB = {
     this.grid = [];
     this.pieces = [];
     this.dragPiece = null;
+    this.obstacles = new Set();
+    this._restartBtn = null;
   }
 };
 

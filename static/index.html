@@ -312,6 +312,8 @@ async function cBM(t){
 }
 function startBB(){
   bbActive=true;
+  const cr=ud&&ud.main_card?ud.main_card.rarity:'common';
+  const cb={common:1,rare:1.2,epic:1.5,legendary:2}[cr]||1;
   $('p4').innerHTML='<div id=bbContainer></div>';
   setTimeout(function(){
     const c=$('bbContainer');
@@ -331,7 +333,7 @@ function startBB(){
         }catch(e){}
         rBB();
       })();
-    });
+    }, bbRating, cb);
   },100);
 }
 
