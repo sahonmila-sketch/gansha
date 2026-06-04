@@ -185,7 +185,7 @@ const BB = {
     el.innerHTML = '\u041A\u041E\u041C\u0411\u041E\u041E\u041E<span class=combo-mult>\u00D7' + this.combo + '</span>';
     document.body.appendChild(el);
     setTimeout(() => { if(el.parentNode) el.parentNode.removeChild(el); }, 800);
-  }
+  },
 
   placePiece(piece, gridRow, gridCol, color) {
     for(const [r, c] of piece) {
