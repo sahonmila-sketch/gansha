@@ -5,7 +5,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from config import DB_PATH, DATABASE_URL, RARITIES, DAILY_BONUS, BOX_PRICE, INITIAL_BALANCE, REFERRAL_BONUS
+from config import DB_PATH, DATABASE_URL, RARITIES, DAILY_BONUS, BOX_PRICE, INITIAL_BALANCE, REFERRAL_BONUS, ADMIN_IDS
 from config import BATTLES_PER_DAY, BATTLE_WIN_BOXES, BATTLE_WIN_TROPHIES, BATTLE_LOSE_COINS, BATTLE_LOSE_TROPHIES, BATTLE_EXTRA_COST, BATTLE_MAX_ROUNDS
 from config import EQUIP_SLOTS, ENEMY_RARITY_WEIGHTS, MISSIONS_PER_DAY, MISSION_TYPES, LEVEL_THRESHOLDS
 from config import BB_MILESTONES
@@ -116,12 +116,32 @@ class Database:
                 await self.db.execute("ALTER TABLE users ADD COLUMN bb_rating INTEGER DEFAULT 0")
             except Exception:
                 pass
+            try:
+                await self.db.execute("ALTER TABLE users ADD COLUMN arena_rating INTEGER DEFAULT 0")
+            except Exception:
+                pass
+            try:
+                await self.db.execute("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0")
+            except Exception:
+                pass
+            try:
+                await self.db.execute("ALTER TABLE users ADD COLUMN is_banned INTEGER DEFAULT 0")
+            except Exception:
+                pass
         else:
             self.db = await aiosqlite.connect(DB_PATH)
             self.db.row_factory = aiosqlite.Row
             await self._create_tables()
             await self._migrate()
             await self.db.commit()
+
+        # Sync admin status for existing users
+        for aid in ADMIN_IDS:
+            await self.db.execute(
+                "UPDATE users SET is_admin = 1 WHERE telegram_id = ? AND (is_admin IS NULL OR is_admin = 0)",
+                (aid,)
+            )
+        await self.db.commit()
 
     async def _create_tables_pg(self):
         await self.db.executescript("""
@@ -141,6 +161,8 @@ class Database:
                 battles_reset TEXT,
                 level INTEGER DEFAULT 1,
                 main_card_id INTEGER,
+                is_admin INTEGER DEFAULT 0,
+                is_banned INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT NOW()
             );
             CREATE TABLE IF NOT EXISTS user_cards (
@@ -228,6 +250,7 @@ class Database:
             CREATE INDEX IF NOT EXISTS idx_pvp_battles_user ON pvp_battles(player1_id);
             CREATE INDEX IF NOT EXISTS idx_pvp_battles_user2 ON pvp_battles(player2_id);
             CREATE INDEX IF NOT EXISTS idx_pvp_actions_battle ON pvp_actions(battle_id);
+            CREATE INDEX IF NOT EXISTS idx_users_trophies ON users(trophies DESC);
             CREATE TABLE IF NOT EXISTS arena_instances (
                 id SERIAL PRIMARY KEY,
                 state TEXT DEFAULT 'waiting',
@@ -280,6 +303,8 @@ class Database:
                 battles_reset TEXT,
                 level INTEGER DEFAULT 1,
                 main_card_id INTEGER,
+                is_admin INTEGER DEFAULT 0,
+                is_banned INTEGER DEFAULT 0,
                 created_at TEXT DEFAULT (datetime('now'))
             );
             CREATE TABLE IF NOT EXISTS user_cards (
@@ -416,6 +441,8 @@ class Database:
             ("battles_reset", "TEXT"),
             ("level", "INTEGER DEFAULT 1"),
             ("main_card_id", "INTEGER"),
+            ("is_admin", "INTEGER DEFAULT 0"),
+            ("is_banned", "INTEGER DEFAULT 0"),
         ]
         for name, dtype in cols:
             try:
@@ -424,6 +451,14 @@ class Database:
                 pass
         try:
             await self.db.execute("ALTER TABLE users ADD COLUMN bb_rating INTEGER DEFAULT 0")
+        except aiosqlite.OperationalError:
+            pass
+        try:
+            await self.db.execute("ALTER TABLE users ADD COLUMN arena_rating INTEGER DEFAULT 0")
+        except aiosqlite.OperationalError:
+            pass
+        try:
+            await self.db.execute("CREATE INDEX IF NOT EXISTS idx_users_trophies ON users(trophies DESC)")
         except aiosqlite.OperationalError:
             pass
         for col in ['balance', 'boxes_opened', 'free_boxes', 'trophies', 'battles_won', 'battles_total', 'level']:
@@ -468,8 +503,8 @@ class Database:
             code = _generate_code()
 
         await self.db.execute(
-            "INSERT INTO users (telegram_id, username, balance, free_boxes, trophies, referral_code) VALUES (?, ?, ?, 0, 0, ?)",
-            (telegram_id, username, INITIAL_BALANCE, code)
+            "INSERT INTO users (telegram_id, username, balance, free_boxes, trophies, referral_code, is_admin) VALUES (?, ?, ?, 0, 0, ?, ?)",
+            (telegram_id, username, INITIAL_BALANCE, code, 1 if telegram_id in ADMIN_IDS else 0)
         )
         await self.db.commit()
         cursor = await self.db.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
@@ -490,6 +525,18 @@ class Database:
         user = await self.get_user(telegram_id)
         if not user:
             return None
+        if user.get("main_card_id"):
+            cursor = await self.db.execute(
+                "SELECT card_id, count FROM user_cards WHERE user_id = ? AND card_id = ?",
+                (user["id"], user["main_card_id"])
+            )
+            row = await cursor.fetchone()
+            if row:
+                card = next((c for c in CHARACTERS if c["id"] == row["card_id"]), None)
+                if card:
+                    level = min(row["count"], 10)
+                    stats = _card_power(card, level)
+                    return {**card, "level": level, **stats}
         equipped = await self.get_equipped(telegram_id)
         weapon = equipped.get("weapon")
         if weapon:
@@ -511,7 +558,7 @@ class Database:
         return {**card, "level": level, **stats}
 
     def _norm_user(self, user: dict) -> dict:
-        for field in ['balance', 'boxes_opened', 'free_boxes', 'trophies', 'battles_won', 'battles_total', 'level', 'bb_rating']:
+        for field in ['balance', 'boxes_opened', 'free_boxes', 'trophies', 'battles_won', 'battles_total', 'level', 'bb_rating', 'arena_rating', 'is_admin', 'is_banned']:
             val = user.get(field)
             user[field] = int(val) if val is not None else 0
         return user
@@ -1034,7 +1081,7 @@ class Database:
         )
         if player_won:
             await self.db.execute(
-                "UPDATE users SET battles_won = battles_won + 1, free_boxes = free_boxes + ?, trophies = trophies + ? WHERE telegram_id = ?",
+                "UPDATE users SET battles_won = battles_won + 1, free_boxes = free_boxes + ?, trophies = trophies + ?, arena_rating = COALESCE(arena_rating, 0) + 10 WHERE telegram_id = ?",
                 (BATTLE_WIN_BOXES, BATTLE_WIN_TROPHIES, telegram_id)
             )
         else:
@@ -1170,7 +1217,7 @@ class Database:
         )
         if challenger_won:
             await self.db.execute(
-                "UPDATE users SET battles_won = battles_won + 1, trophies = trophies + ? WHERE telegram_id = ?",
+                "UPDATE users SET battles_won = battles_won + 1, trophies = trophies + ?, arena_rating = COALESCE(arena_rating, 0) + 15 WHERE telegram_id = ?",
                 (BATTLE_WIN_TROPHIES, challenger_id)
             )
             await self.db.execute(
@@ -1179,7 +1226,7 @@ class Database:
             )
         else:
             await self.db.execute(
-                "UPDATE users SET trophies = trophies + ? WHERE telegram_id = ?",
+                "UPDATE users SET trophies = trophies + ?, arena_rating = COALESCE(arena_rating, 0) + 5 WHERE telegram_id = ?",
                 (BATTLE_LOSE_TROPHIES, challenger_id)
             )
 
@@ -1357,6 +1404,7 @@ class Database:
         if not user:
             return None
         rating = user.get("bb_rating", 0)
+        arena_rating = user.get("arena_rating", 0)
         cursor = await self.db.execute(
             "SELECT milestone FROM bb_milestones WHERE user_id = ? AND claimed = 0",
             (user["id"],)
@@ -1408,6 +1456,8 @@ class Database:
 
         return {
             "rating": rating,
+            "arena_rating": arena_rating,
+            "combined_rating": rating + arena_rating,
             "unclaimed": unclaimed,
             "milestones": milestones,
             "next_milestone": next_m,
@@ -1482,3 +1532,24 @@ class Database:
         await self.db.commit()
 
         return {"reward": f"{boxes} ящиков", "boxes_added": boxes}, None
+
+    # ── Admin / Ban ──
+
+    async def ban_user(self, telegram_id: int):
+        await self.db.execute("UPDATE users SET is_banned = 1 WHERE telegram_id = ?", (telegram_id,))
+        await self.db.commit()
+
+    async def unban_user(self, telegram_id: int):
+        await self.db.execute("UPDATE users SET is_banned = 0 WHERE telegram_id = ?", (telegram_id,))
+        await self.db.commit()
+
+    async def check_banned(self, telegram_id: int) -> bool:
+        user = await self.get_user(telegram_id)
+        return user is not None and user.get("is_banned", 0) == 1
+
+    async def add_free_boxes(self, telegram_id: int, amount: int):
+        await self.db.execute(
+            "UPDATE users SET free_boxes = COALESCE(free_boxes, 0) + ? WHERE telegram_id = ?",
+            (amount, telegram_id)
+        )
+        await self.db.commit()

@@ -177,7 +177,7 @@ class ArenaManager:
                 (now_str, winner_record["id"], 99, arena_id)
             )
             await self.db.add_coins(winner_record["telegram_id"], ARENA_WIN_COINS, f"\u041f\u043e\u0431\u0435\u0434\u0430 \u043d\u0430 \u0430\u0440\u0435\u043d\u0435 #{arena_id}")
-            await self.db.execute("UPDATE users SET trophies = trophies + ? WHERE telegram_id = ?", (ARENA_WIN_TROPHIES, winner_record["telegram_id"]))
+            await self.db.execute("UPDATE users SET trophies = trophies + ?, arena_rating = COALESCE(arena_rating, 0) + 25 WHERE telegram_id = ?", (ARENA_WIN_TROPHIES, winner_record["telegram_id"]))
             for p in final_players:
                 tg = p["telegram_id"]
                 if tg != winner_record["telegram_id"]:

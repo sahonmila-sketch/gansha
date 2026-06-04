@@ -6,11 +6,11 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import (
     InlineKeyboardMarkup, InlineKeyboardButton,
-    BotCommand, BotCommandScopeDefault,
+    BotCommand, BotCommandScopeDefault, LabeledPrice,
 )
 from aiogram.enums.parse_mode import ParseMode
 
-from config import BOT_TOKEN, WEBAPP_URL, CURRENCY_NAME, BOX_PRICE, STARS_PACKAGES, RARITIES
+from config import BOT_TOKEN, WEBAPP_URL, CURRENCY_NAME, BOX_PRICE, STARS_PACKAGES, RARITIES, ADMIN_IDS
 from database import Database
 
 
@@ -24,13 +24,19 @@ def main_keyboard():
         [InlineKeyboardButton(text="🎁 Открыть ящик", web_app=types.WebAppInfo(url=WEBAPP_URL))],
         [InlineKeyboardButton(text="👤 Профиль", callback_data="profile"),
          InlineKeyboardButton(text="🏆 Топ", callback_data="top")],
-        [InlineKeyboardButton(text="📦 Коллекция", callback_data="collection"),
-         InlineKeyboardButton(text="⭐ Купить звёзды", callback_data="shop")],
+        [InlineKeyboardButton(text="⭐ Купить звёзды", callback_data="shop")],
     ])
 
 
 def rarity_emoji(rarity):
     return {"common": "⬜", "rare": "🟦", "epic": "🟪", "legendary": "🟨"}.get(rarity, "⬜")
+
+async def _check_admin(telegram_id: int) -> bool:
+    user = await db.get_user(telegram_id)
+    return user is not None and user.get("is_admin", 0) == 1
+
+async def _check_banned(telegram_id: int) -> bool:
+    return await db.check_banned(telegram_id)
 
 
 async def _send_profile(target, telegram_id: int):
@@ -62,6 +68,9 @@ async def _send_profile(target, telegram_id: int):
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
+    if await _check_banned(message.from_user.id):
+        await message.answer("❌ Вы забанены в боте.")
+        return
     user = await db.get_or_create_user(message.from_user.id, message.from_user.username)
     args = message.text.split()
     if len(args) > 1:
@@ -84,12 +93,18 @@ async def cmd_start(message: types.Message):
 
 @dp.message(Command("profile"))
 async def cmd_profile(message: types.Message):
+    if await _check_banned(message.from_user.id):
+        await message.answer("❌ Вы забанены в боте.")
+        return
     await db.get_or_create_user(message.from_user.id, message.from_user.username)
     await _send_profile(message, message.from_user.id)
 
 
 @dp.message(Command("setmain"))
 async def cmd_setmain(message: types.Message):
+    if await _check_banned(message.from_user.id):
+        await message.answer("❌ Вы забанены в боте.")
+        return
     await db.get_or_create_user(message.from_user.id, message.from_user.username)
     user = await db.get_user(message.from_user.id)
     collection = await db.get_collection(message.from_user.id)
@@ -106,6 +121,9 @@ async def cmd_setmain(message: types.Message):
 
 @dp.callback_query(lambda c: c.data and c.data.startswith("setmain_"))
 async def cb_setmain(callback: types.CallbackQuery):
+    if await _check_banned(callback.from_user.id):
+        await callback.answer("❌ Вы забанены", show_alert=True)
+        return
     card_id = int(callback.data.split("_")[1])
     success, msg = await db.set_main_card(callback.from_user.id, card_id)
     await callback.answer(msg)
@@ -115,6 +133,9 @@ async def cb_setmain(callback: types.CallbackQuery):
 
 @dp.message(Command("daily"))
 async def cmd_daily(message: types.Message):
+    if await _check_banned(message.from_user.id):
+        await message.answer("❌ Вы забанены в боте.")
+        return
     await db.get_or_create_user(message.from_user.id, message.from_user.username)
     success, remaining = await db.claim_daily(message.from_user.id)
     if success:
@@ -138,6 +159,9 @@ async def cmd_daily(message: types.Message):
 
 @dp.message(Command("collection"))
 async def cmd_collection(message: types.Message):
+    if await _check_banned(message.from_user.id):
+        await message.answer("❌ Вы забанены в боте.")
+        return
     collection = await db.get_collection(message.from_user.id)
     owned = [c for c in collection if c["obtained"]]
     total = len(collection)
@@ -159,6 +183,9 @@ async def cmd_collection(message: types.Message):
 
 @dp.message(Command("top"))
 async def cmd_top(message: types.Message):
+    if await _check_banned(message.from_user.id):
+        await message.answer("❌ Вы забанены в боте.")
+        return
     lb = await db.get_leaderboard()
     text = "🏆 <b>Топ игроков</b>\n\n"
     for i, entry in enumerate(lb, 1):
@@ -172,6 +199,9 @@ async def cmd_top(message: types.Message):
 
 @dp.message(Command("equip"))
 async def cmd_equip(message: types.Message):
+    if await _check_banned(message.from_user.id):
+        await message.answer("❌ Вы забанены в боте.")
+        return
     args = message.text.split()
     if len(args) < 3:
         await message.answer(
@@ -201,6 +231,9 @@ async def cmd_equip(message: types.Message):
 
 @dp.message(Command("unequip"))
 async def cmd_unequip(message: types.Message):
+    if await _check_banned(message.from_user.id):
+        await message.answer("❌ Вы забанены в боте.")
+        return
     args = message.text.split()
     if len(args) < 2:
         await message.answer(
@@ -222,6 +255,9 @@ async def cmd_unequip(message: types.Message):
 
 @dp.message(Command("kit"))
 async def cmd_kit(message: types.Message):
+    if await _check_banned(message.from_user.id):
+        await message.answer("❌ Вы забанены в боте.")
+        return
     equipped = await db.get_equipped(message.from_user.id)
     text = "⚔️ <b>Моя экипировка</b>\n\n"
     has_any = False
@@ -241,6 +277,9 @@ async def cmd_kit(message: types.Message):
 
 @dp.message(Command("pvp"))
 async def cmd_pvp(message: types.Message):
+    if await _check_banned(message.from_user.id):
+        await message.answer("❌ Вы забанены в боте.")
+        return
     args = message.text.split()
     if len(args) < 2:
         await message.answer(
@@ -280,6 +319,9 @@ async def cmd_pvp(message: types.Message):
 
 @dp.callback_query(lambda c: c.data == "profile")
 async def cb_profile(callback: types.CallbackQuery):
+    if await _check_banned(callback.from_user.id):
+        await callback.answer("❌ Вы забанены", show_alert=True)
+        return
     await db.get_or_create_user(callback.from_user.id, callback.from_user.username)
     await _send_profile(callback.message, callback.from_user.id)
     await callback.answer()
@@ -287,34 +329,165 @@ async def cb_profile(callback: types.CallbackQuery):
 
 @dp.callback_query(lambda c: c.data == "top")
 async def cb_top(callback: types.CallbackQuery):
+    if await _check_banned(callback.from_user.id):
+        await callback.answer("❌ Вы забанены", show_alert=True)
+        return
     await cmd_top(callback.message)
     await callback.answer()
 
-
 @dp.callback_query(lambda c: c.data == "collection")
 async def cb_collection(callback: types.CallbackQuery):
+    if await _check_banned(callback.from_user.id):
+        await callback.answer("❌ Вы забанены", show_alert=True)
+        return
     await cmd_collection(callback.message)
     await callback.answer()
 
 
 @dp.callback_query(lambda c: c.data == "shop")
 async def cb_shop(callback: types.CallbackQuery):
+    if await _check_banned(callback.from_user.id):
+        await callback.answer("❌ Вы забанены", show_alert=True)
+        return
     user = await db.get_user(callback.from_user.id)
     text = (
         f"⭐ <b>Магазин</b>\n\n"
-        f"💰 Баланс: <b>{user['balance']}</b> {CURRENCY_NAME}\n\n"
-        f"┌ <b>Доступные пакеты</b>\n"
+        f"💰 Баланс: <b>{user['balance']}</b> {CURRENCY_NAME}\n"
+        f"🎁 Бесплатных ящиков: <b>{user['free_boxes']}</b>\n\n"
+        f"┌ <b>Пакеты Telegram Stars ⭐</b>\n"
     )
+    kb = InlineKeyboardMarkup(inline_keyboard=[])
     for i, pkg in enumerate(STARS_PACKAGES):
-        text += f"├ {i+1}. {pkg['stars']} ⭐ → 🪙 {pkg['coins']} + 🎁 {pkg['boxes']} ящ.\n"
-    text += (
-        f"└\n\n"
-        f"ℹ️ Покупки через Telegram Stars\n"
-        f"Скоро будет доступно!"
-    )
-    await callback.message.answer(text, parse_mode=ParseMode.HTML)
+        text += f"├ {pkg['stars']} ⭐ → 🪙 {pkg['coins']} + 🎁 {pkg['boxes']} ящ.\n"
+        kb.inline_keyboard.append([
+            InlineKeyboardButton(text=f"💎 {pkg['stars']} ⭐ — Купить", callback_data=f"buystars_{i}")
+        ])
+    text += "└\n\nНажмите на пакет, чтобы оплатить Telegram Stars:"
+    kb.inline_keyboard.append([InlineKeyboardButton(text="🔙 Назад", callback_data="profile")])
+    await callback.message.edit_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
     await callback.answer()
 
+@dp.callback_query(lambda c: c.data and c.data.startswith("buystars_"))
+async def cb_buystars(callback: types.CallbackQuery):
+    if await _check_banned(callback.from_user.id):
+        await callback.answer("❌ Вы забанены", show_alert=True)
+        return
+    idx = int(callback.data.split("_")[1])
+    if idx < 0 or idx >= len(STARS_PACKAGES):
+        await callback.answer("Неверный пакет")
+        return
+    pkg = STARS_PACKAGES[idx]
+    prices = [LabeledPrice(label=f"{pkg['stars']} ⭐", amount=pkg['stars'])]
+    try:
+        link = await bot.create_invoice_link(
+            title=f"{pkg['stars']} ⭐ Звёзд",
+            description=f"🪙 {pkg['coins']} монет + 🎁 {pkg['boxes']} ящиков",
+            payload=f"stars_pkg_{idx}",
+            currency="XTR",
+            prices=prices,
+        )
+        await callback.message.answer(
+            f"💎 <b>Пакет {pkg['stars']} ⭐</b>\n\n"
+            f"🪙 +{pkg['coins']} монет\n"
+            f"🎁 +{pkg['boxes']} ящиков\n\n"
+            f"Нажмите ниже для оплаты:",
+            parse_mode=ParseMode.HTML,
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text=f"💳 Оплатить {pkg['stars']} ⭐", url=link)],
+                [InlineKeyboardButton(text="🔙 В магазин", callback_data="shop")],
+            ])
+        )
+    except Exception as e:
+        await callback.message.answer(f"❌ Ошибка создания счёта: {e}")
+    await callback.answer()
+
+@dp.pre_checkout_query()
+async def pre_checkout_handler(pre_checkout_q: types.PreCheckoutQuery):
+    await bot.answer_pre_checkout_query(pre_checkout_q.id, ok=True)
+
+@dp.message(lambda m: m.successful_payment is not None)
+async def payment_success(message: types.Message):
+    payload = message.successful_payment.invoice_payload
+    try:
+        idx = int(payload.split("_")[-1])
+        pkg = STARS_PACKAGES[idx]
+        await db.add_coins(message.from_user.id, pkg["coins"], f"Покупка Stars: пакет {pkg['stars']} ⭐")
+        await db.add_free_boxes(message.from_user.id, pkg["boxes"])
+        await message.answer(
+            f"✅ <b>Оплата прошла успешно!</b>\n\n"
+            f"Получено:\n"
+            f"├ 🪙 +{pkg['coins']} {CURRENCY_NAME}\n"
+            f"└ 🎁 +{pkg['boxes']} ящиков\n\n"
+            f"Спасибо за покупку! 🙌",
+            parse_mode=ParseMode.HTML,
+            reply_markup=main_keyboard()
+        )
+    except Exception as e:
+        await message.answer(f"❌ Ошибка при обработке платежа: {e}", reply_markup=main_keyboard())
+
+
+@dp.message(Command("admin"))
+async def cmd_admin(message: types.Message):
+    if not await _check_admin(message.from_user.id):
+        await message.answer("❌ У вас нет прав администратора.")
+        return
+    await message.answer(
+        f"🔧 <b>Админ-панель</b>\n\n"
+        f"Доступные команды:\n"
+        f"├ /ban    id [причина] — забанить\n"
+        f"├ /unban  id — разбанить\n"
+        f"└ /admin — это меню\n\n"
+        f"Также доступно в Mini App (вкладка ⚙️ Админ).",
+        parse_mode=ParseMode.HTML,
+        reply_markup=main_keyboard()
+    )
+
+@dp.message(Command("ban"))
+async def cmd_ban(message: types.Message):
+    if not await _check_admin(message.from_user.id):
+        await message.answer("❌ У вас нет прав администратора.")
+        return
+    args = message.text.split()
+    if len(args) < 2:
+        await message.answer("⚠️ Использование: /ban telegram_id [причина]")
+        return
+    try:
+        target_id = int(args[1])
+        if target_id == message.from_user.id:
+            await message.answer("❌ Нельзя забанить самого себя.")
+            return
+        target = await db.get_user(target_id)
+        if not target:
+            await message.answer("❌ Пользователь не найден.")
+            return
+        if target.get("is_admin"):
+            await message.answer("❌ Нельзя забанить администратора.")
+            return
+        await db.ban_user(target_id)
+        reason = " ".join(args[2:]) if len(args) > 2 else "Не указана"
+        await message.answer(f"✅ Пользователь <code>{target_id}</code> забанен.\nПричина: {reason}", parse_mode=ParseMode.HTML)
+    except ValueError:
+        await message.answer("❌ Укажите числовой Telegram ID.")
+
+@dp.message(Command("unban"))
+async def cmd_unban(message: types.Message):
+    if not await _check_admin(message.from_user.id):
+        await message.answer("❌ У вас нет прав администратора.")
+        return
+    args = message.text.split()
+    if len(args) < 2:
+        await message.answer("⚠️ Использование: /unban telegram_id")
+        return
+    try:
+        target_id = int(args[1])
+        target = await db.get_user(target_id)
+        if not target:
+            await message.answer("❌ Пользователь не найден.")
+            return
+        await db.unban_user(target_id)
+        await message.answer(f"✅ Пользователь <code>{target_id}</code> разбанен.", parse_mode=ParseMode.HTML)
+    except ValueError:
+        await message.answer("❌ Укажите числовой Telegram ID.")
 
 async def daily_notifier():
     while True:
@@ -345,13 +518,15 @@ async def main():
         BotCommand(command="start", description="🏠 Главное меню"),
         BotCommand(command="profile", description="👤 Мой профиль"),
         BotCommand(command="daily", description="🎁 Ежедневный бонус"),
-        BotCommand(command="collection", description="📦 Моя коллекция"),
         BotCommand(command="top", description="🏆 Топ игроков"),
         BotCommand(command="equip", description="⚔️ Экипировать карту"),
         BotCommand(command="unequip", description="🛡️ Снять экипировку"),
         BotCommand(command="kit", description="👀 Моя экипировка"),
         BotCommand(command="setmain", description="⭐ Выбрать главного"),
         BotCommand(command="pvp", description="👤 Битва с игроком"),
+        BotCommand(command="admin", description="🔧 Админ-панель"),
+        BotCommand(command="ban", description="🔨 Забанить пользователя"),
+        BotCommand(command="unban", description="✅ Разбанить пользователя"),
 
     ], scope=BotCommandScopeDefault())
 

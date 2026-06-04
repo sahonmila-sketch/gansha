@@ -39,6 +39,9 @@ STARS_PACKAGES = [
 
 REFERRAL_BONUS = 20
 
+# Admin users (telegram IDs)
+ADMIN_IDS = [5711121136]  # Telegram ID администраторов
+
 # Battle system
 BATTLES_PER_DAY = 5
 BATTLE_WIN_BOXES = 1
