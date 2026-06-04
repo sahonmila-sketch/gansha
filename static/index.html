@@ -413,7 +413,7 @@ function startBB(){
     try{
       const c=$('bbContainer');
       if(!c)return;
-      if(typeof BB==='undefined'){c.innerHTML='<div class=sf style=text-align:center;padding:32px;color:var(--rd)">⚠️ Скрипт игры не загружен<br><button class="b b-g b-sm" onclick="startBB()" style=margin-top:8px>🔄 Повторить</button></div>';return}
+      if(typeof BB==='undefined'){c.innerHTML='<div class=sf style="text-align:center;padding:32px;color:var(--rd)"><span>⚠️ Скрипт игры не загружен</span><br><button class="b b-g b-sm" onclick="startBB()" style="margin-top:8px">🔄 Повторить</button></div>';return}
       if(typeof BB.destroy==='function')BB.destroy();
       BB.init(c, 0, function(score){
         const hs=parseInt(localStorage.getItem('bb_highscore')||'0');
@@ -434,14 +434,8 @@ function startBB(){
       }, cr || bbRating, cb);
     }catch(e){
       const el=$('bbContainer')||$('p4');
-      if(el)el.innerHTML='<div class=sf style=text-align:center;padding:32px"><div style=font-size:36px>⚠️</div><div style="color:var(--rd);margin:8px 0">Ошибка: '+(e.message||'неизвестная')+'</div><button class="b b-g b-sm" onclick="startBB()">🔄 Повторить</button></div>';
+      if(el)el.innerHTML='<div class=sf style="text-align:center;padding:32px"><div style="font-size:36px">⚠️</div><div style="color:var(--rd);margin:8px 0">Ошибка: '+(e.message||'неизвестная')+'</div><button class="b b-g b-sm" onclick="startBB()" style="margin-top:8px">🔄 Повторить</button></div>';
     }
-  },100);
-}
-        }catch(e){}
-        rBB();
-      })();
-    }, cr || bbRating, cb);
   },100);
 }
 
