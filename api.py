@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -6,12 +6,16 @@ from typing import Optional
 import uvicorn
 from pathlib import Path
 
+import json
+
 from database import Database
 from config import API_HOST, API_PORT, WEBAPP_URL, RARITIES, STARS_PACKAGES, ADMIN_IDS
 from characters import CHARACTERS as ALL_CHARS
+from ludo_game import ludo_server
 
 app = FastAPI(title="Gacha Battle API")
 db = Database()
+bot = None
 
 app.add_middleware(
     CORSMiddleware,
@@ -36,7 +40,7 @@ class StarsPurchaseRequest(BaseModel):
     package_index: int
 
 
-class BBScoreRequest(BaseModel):
+class LudoScoreRequest(BaseModel):
     score: int
 
 
@@ -56,6 +60,7 @@ async def _check_admin(telegram_id: int):
         raise HTTPException(status_code=403, detail="Требуются права администратора")
 
 
+@app.get("/health")
 @app.get("/")
 async def root():
     return {
@@ -172,30 +177,52 @@ async def packages():
     return STARS_PACKAGES
 
 
-# ── Block Blast ──
+@app.post("/create-invoice/{telegram_id}/{package_idx}")
+async def create_invoice(telegram_id: int, package_idx: int):
+    if bot is None:
+        raise HTTPException(status_code=500, detail="Bot not initialized")
+    if package_idx < 0 or package_idx >= len(STARS_PACKAGES):
+        raise HTTPException(status_code=400, detail="Invalid package")
+    pkg = STARS_PACKAGES[package_idx]
+    from aiogram.types import LabeledPrice
+    prices = [LabeledPrice(label=f"{pkg['stars']} ⭐", amount=pkg['stars'])]
+    try:
+        link = await bot.create_invoice_link(
+            title=f"{pkg['stars']} ⭐ Stars",
+            description=f"🪙 {pkg['coins']} coins + 🎁 {pkg['boxes']} boxes",
+            payload=f"stars_pkg_{package_idx}",
+            currency="XTR",
+            prices=prices,
+        )
+        return {"link": link, "stars": pkg["stars"], "coins": pkg["coins"], "boxes": pkg["boxes"]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/submit-bb-score/{telegram_id}")
-async def submit_bb_score(telegram_id: int, req: BBScoreRequest):
+
+# ── Ludo ──
+
+@app.post("/submit-ludo-score/{telegram_id}")
+async def submit_ludo_score(telegram_id: int, req: LudoScoreRequest):
     await _check_banned(telegram_id)
-    result, error = await db.submit_bb_score(telegram_id, req.score)
+    result, error = await db.submit_ludo_score(telegram_id, req.score)
     if error:
         raise HTTPException(status_code=400, detail=error)
     return result
 
 
-@app.get("/bb-data/{telegram_id}")
-async def get_bb_data(telegram_id: int):
+@app.get("/ludo-data/{telegram_id}")
+async def get_ludo_data(telegram_id: int):
     await _check_banned(telegram_id)
-    result = await db.get_bb_data(telegram_id)
+    result = await db.get_ludo_data(telegram_id)
     if not result:
         raise HTTPException(status_code=400, detail="Пользователь не найден")
     return result
 
 
-@app.post("/claim-bb-milestone/{telegram_id}/{threshold}")
-async def claim_bb_milestone(telegram_id: int, threshold: int):
+@app.post("/claim-ludo-milestone/{telegram_id}/{threshold}")
+async def claim_ludo_milestone(telegram_id: int, threshold: int):
     await _check_banned(telegram_id)
-    result, error = await db.claim_bb_milestone(telegram_id, threshold)
+    result, error = await db.claim_ludo_milestone(telegram_id, threshold)
     if error:
         raise HTTPException(status_code=400, detail=error)
     return result
@@ -356,6 +383,38 @@ async def admin_check(telegram_id: int):
     if not user:
         raise HTTPException(status_code=404, detail="Пользователь не найден")
     return {"is_admin": user.get("is_admin", 0) == 1, "is_banned": user.get("is_banned", 0) == 1}
+
+# ── Ludo WebSocket ──
+
+@app.websocket("/ws/ludo/{room_id}/{telegram_id}")
+async def ludo_ws(websocket: WebSocket, room_id: str, telegram_id: int):
+    await websocket.accept()
+    try:
+        if room_id == "new":
+            rid, _ = await ludo_server.create_room(telegram_id, websocket)
+            await websocket.send_text(json.dumps({"type": "room_created", "room_id": rid}))
+            logger.info(f"Ludo room created {rid} by {telegram_id}")
+            # Wait for messages until disconnect
+            while True:
+                raw = await websocket.receive_text()
+                await ludo_server.handle_message(telegram_id, raw)
+        else:
+            success, error = await ludo_server.join_room(telegram_id, room_id, websocket)
+            if not success:
+                await websocket.send_text(json.dumps({"type": "error", "message": error}))
+                await websocket.close(1008, error)
+                return
+            logger.info(f"Ludo player {telegram_id} joined room {room_id}")
+            while True:
+                raw = await websocket.receive_text()
+                await ludo_server.handle_message(telegram_id, raw)
+    except WebSocketDisconnect:
+        logger.info(f"Ludo WebSocket disconnected: {telegram_id}")
+        await ludo_server.disconnect(telegram_id)
+    except Exception as e:
+        logger.error(f"Ludo WS error for {telegram_id}: {e}")
+        await ludo_server.disconnect(telegram_id)
+
 
 def run_api():
     uvicorn.run(app, host=API_HOST, port=API_PORT)

@@ -6,11 +6,18 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN", "ВАШ_ТОКЕН_ОТ_BOTFATHER")
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
 API_PORT = int(os.getenv("PORT") or os.getenv("API_PORT", "8000"))
-_railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN") or (
-    f"{os.getenv('RAILWAY_SERVICE_NAME')}-{os.getenv('RAILWAY_ENVIRONMENT_NAME')}.up.railway.app"
-    if os.getenv("RAILWAY_SERVICE_NAME") and os.getenv("RAILWAY_ENVIRONMENT_NAME")
-    else None
-)
+_railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN")
+if not _railway_domain:
+    for key, val in os.environ.items():
+        if key.startswith("RAILWAY_SERVICE_") and key.endswith("_URL"):
+            _railway_domain = val
+            break
+if not _railway_domain:
+    _railway_domain = (
+        f"{os.getenv('RAILWAY_SERVICE_NAME')}-{os.getenv('RAILWAY_ENVIRONMENT_NAME')}.up.railway.app"
+        if os.getenv("RAILWAY_SERVICE_NAME") and os.getenv("RAILWAY_ENVIRONMENT_NAME")
+        else None
+    )
 if _railway_domain:
     WEBAPP_URL = f"https://{_railway_domain}/static/index.html"
 else:
@@ -32,9 +39,11 @@ RARITIES = {
 }
 
 STARS_PACKAGES = [
-    {"stars": 100, "coins": 50, "boxes": 5},
-    {"stars": 250, "coins": 150, "boxes": 15},
-    {"stars": 500, "coins": 400, "boxes": 40},
+    {"stars": 15, "coins": 30, "boxes": 2},
+    {"stars": 50, "coins": 100, "boxes": 10},
+    {"stars": 100, "coins": 250, "boxes": 25},
+    {"stars": 250, "coins": 600, "boxes": 60},
+    {"stars": 500, "coins": 1500, "boxes": 150},
 ]
 
 REFERRAL_BONUS = 20
@@ -71,8 +80,8 @@ MISSION_TYPES = [
 # Level thresholds (cumulative trophies needed)
 LEVEL_THRESHOLDS = [0, 30, 70, 130, 210, 320, 460, 630, 840, 1100, 1500]
 
-# Block Blast rating milestones (threshold → boxes reward)
-BB_MILESTONES = [
+# Ludo rating milestones (threshold → boxes reward)
+LUDO_MILESTONES = [
     (100000, 5),
     (200000, 5),
     (300000, 5),

@@ -16,6 +16,7 @@ async def main():
     bot.db = db
 
     from bot import dp, bot as tg_bot
+    api.bot = tg_bot
     polling_task = asyncio.create_task(dp.start_polling(tg_bot))
 
     import uvicorn

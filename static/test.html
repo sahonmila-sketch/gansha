@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset=UTF-8><meta name=viewport content="width=device-width,initial-scale=1">
+<title>Test</title></head>
+<body style="background:#06060e;color:#e8e8f5;font-family:sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:20px;text-align:center">
+<h2>⚔️ Gacha Battle</h2>
+<p id=status style="color:#6a6a9a;margin-top:12px">Загрузка...</p>
+<script src=https://telegram.org/js/telegram-web-app.js></script>
+<script>
+var st=document.getElementById('status');
+try{
+  var tg=window.Telegram.WebApp;
+  tg.expand();
+  st.textContent='Telegram WebApp: OK';
+  var uid=tg.initDataUnsafe?.user?.id;
+  if(uid){st.textContent='User ID: '+uid}
+  else{st.textContent='WebApp OK, no user data (outside Telegram?)'}
+}catch(e){
+  st.textContent='Error: '+e.message;
+}
+</script>
+</body>
+</html>
