@@ -563,6 +563,6 @@ async function chkBan(){
 if(!uid){$('ld').innerHTML='<div class=sf style="text-align:center;padding:48px 16px"><div style="font-size:64px;margin-bottom:12px">⚔️</div><h2 style="margin-bottom:4px">Gacha Battle</h2><p style="color:var(--tx2)">Запусти бота в Telegram!</p></div>'}
 else{var _lt=setTimeout(function(){try{$('ld').innerHTML='<div class=sf style="text-align:center;padding:48px"><div style="font-size:48px">⏱</div><div style="color:var(--tx2);margin:8px 0">Долгая загрузка...</div><button class="b b-g" onclick="location.reload()">🔄 Повторить</button></div>'}catch(e){}},8000);fP().then(function(){clearTimeout(_lt);if(ud.is_banned){$('ld').style.display='none';showBanScreen();return}sp('p1');$('ld').style.display='none'}).catch(function(e){clearTimeout(_lt);$('ld').innerHTML='<div class=sf style="text-align:center;padding:48px"><p style="color:var(--rd)">❌ '+e.message+'</p><button class="b b-g" style="margin-top:8px" onclick="location.reload()">🔄 Повторить</button></div>'})}
 </script>
-<script src=/static/ludo.js?v=1></script>
+<script src=/static/ludo.js?v=2></script>
 </body>
 </html>
