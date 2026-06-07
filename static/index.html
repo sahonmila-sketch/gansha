@@ -198,7 +198,7 @@ body::after{content:'';position:fixed;inset:0;background:repeating-linear-gradie
     <button class=tb-b data-p=p1>👤Профиль</button>
     <button class=tb-b data-p=p2>🎁Ящик</button>
     <button class=tb-b data-p=p3>📦Карты</button>
-    <button class=tb-b data-p=p4>🎲Лудо</button>
+    <button class=tb-b data-p=p4>🌊Волна</button>
     <button class=tb-b data-p=p5>🏆Топ</button>
     <button class=tb-b data-p=p6 id=admBtn style=display:none>⚙️Админ</button>
     <button class=tb-b data-p=p7>⭐Магазин</button>
@@ -241,8 +241,8 @@ function r2(t){return new Promise(function(r){setTimeout(r,t)})}
 async function ap(path,extra){var opt={headers:{'Content-Type':'application/json'}};if(extra){for(var k in extra){if(extra.hasOwnProperty(k))opt[k]=extra[k]}}var r=await fetch(''+A+path,opt);if(!r.ok){var m;try{var e=await r.json();m=e.detail||e.message}catch(e){m=r.statusText}throw new Error(m||'Ошибка')}return r.json()}
 
 qa('.tb-b').forEach(function(b){b.addEventListener('click',function(){sp(b.dataset.p)})});
-function sp(n){qa('.pg').forEach(function(p){p.classList.remove('on')});qa('.tb-b').forEach(function(b){b.classList.remove('on')});$(n).classList.add('on');q('.tb-b[data-p="'+n+'"]').classList.add('on');if(typeof LUDO!=='undefined'&&LUDO.canvas&&n!=='p4'){LUDO.destroy()}lp(n)}
-async function lp(n){if(!uid)return;try{if(n==='p1'){_pC();await rP()}else if(n==='p2'){_pC();rG()}else if(n==='p3'){_pC();await rC()}else if(n==='p4'){_pC();rLudo()}else if(n==='p5'){_pC();await rT()}else if(n==='p6'){_pC();await rA()}else if(n==='p7'){_pC();await rS()}}catch(e){var m=e&&e.message||'Неизвестная ошибка';T('Ошибка: '+m,'e');var el=$(n);if(el){if(!el.innerHTML.trim()||el.innerHTML.indexOf('ld')>=0||el.innerHTML.indexOf('spn')>=0)el.innerHTML='<div class=sf style="text-align:center;padding:32px"><div style="font-size:36px">⚠️</div><div style="color:var(--rd);margin:8px 0">'+m+'</div><button class="b b-p b-sm" onclick="sp(\''+n+'\')">🔄</button></div>';else el.innerHTML+='<div class=sf style="text-align:center;margin-top:8px;color:var(--rd)">⚠️ '+m+'</div>'}}}
+function sp(n){qa('.pg').forEach(function(p){p.classList.remove('on')});qa('.tb-b').forEach(function(b){b.classList.remove('on')});$(n).classList.add('on');q('.tb-b[data-p="'+n+'"]').classList.add('on');if(typeof GDWave!=='undefined'&&GDWave.can&&n!=='p4'){GDWave.destroy()}lp(n)}
+async function lp(n){if(!uid)return;try{if(n==='p1'){_pC();await rP()}else if(n==='p2'){_pC();rG()}else if(n==='p3'){_pC();await rC()}else if(n==='p4'){_pC();rW()}else if(n==='p5'){_pC();await rT()}else if(n==='p6'){_pC();await rA()}else if(n==='p7'){_pC();await rS()}}catch(e){var m=e&&e.message||'Неизвестная ошибка';T('Ошибка: '+m,'e');var el=$(n);if(el){if(!el.innerHTML.trim()||el.innerHTML.indexOf('ld')>=0||el.innerHTML.indexOf('spn')>=0)el.innerHTML='<div class=sf style="text-align:center;padding:32px"><div style="font-size:36px">⚠️</div><div style="color:var(--rd);margin:8px 0">'+m+'</div><button class="b b-p b-sm" onclick="sp(\''+n+'\')">🔄</button></div>';else el.innerHTML+='<div class=sf style="text-align:center;margin-top:8px;color:var(--rd)">⚠️ '+m+'</div>'}}}
 
 async function fP(){
   var un=tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user?tg.initDataUnsafe.user.username:'';
@@ -260,7 +260,7 @@ async function rP(){
   var rb=is1?'<div class="rank-badge t1">👑 #1 Мастер</div>':'<div class=rank-badge>🏅 #'+(p.rank||'?')+'</div>';
   var mcH=mc?'<div class="cw '+_gr(ri)+'" style="margin:-6px -6px 8px">'+crown+fires+'<div style="margin:'+(is1?'28px':'8px')+' 0 4px"><span class=be>'+mc.emoji+'</span></div><div class="nm '+_id(ri)+'" style="font-size:22px">'+mc.name+'</div><div style="font-size:11px;color:var(--tx2);margin:2px 0">⭐ lv'+mc.level+'</div>'+rb+'<div class=cs><div class=csb><div class="v '+_id(ri)+'">❤️'+(mc.hp||0)+'</div><div class=l>HP</div></div><div class=csb><div class="v '+_id(ri)+'">⚔️'+(mc.atk||0)+'</div><div class=l>ATK</div></div><div class=csb><div class="v '+_id(ri)+'">🛡️'+(mc.def||0)+'</div><div class=l>DEF</div></div></div><div class="cl '+_bg(ri)+'"'+(is1?' style="background:linear-gradient(90deg,var(--gd),var(--or),var(--gd))"':'')+'></div><div style="display:flex;gap:6px;justify-content:center;margin-top:4px"><button class="b b-sm b-p" onclick="sM()">⭐ Сменить</button><button class="b b-sm b-p" onclick="sp(\'p3\')">📦 Коллекция</button></div></div>':'<div class="cw g0" style="margin:-6px -6px 8px;cursor:pointer" onclick="sp(\'p2\')"><div style="font-size:56px;margin:8px 0">❓</div><div style="font-size:14px;opacity:.6">Персонаж не выбран</div><div style="font-size:11px;color:var(--tx2);margin-top:4px">Открой ящик!</div></div>';
   var db=p.can_claim_daily?'<button class="b b-gr" onclick="cD()">🎁 Забрать бонус</button>':'<div style="text-align:center;color:var(--tx2);font-size:13px;padding:6px">⏳ Бонус через '+fm(p.daily_cooldown)+'</div>';
-  var ar=p.arena_rating||0;var lr=p.ludo_rating||0;
+  var ar=p.arena_rating||0;
   $('p1').innerHTML=mcH+'<div class=sf><div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap"><div style="background:var(--sf2);border-radius:8px;padding:10px;flex:1;min-width:80px;text-align:center"><div style="font-size:18px;font-weight:700">'+p.balance+'</div><div style="font-size:9px;color:var(--tx2)">💰 Монет</div></div><div style="background:var(--sf2);border-radius:8px;padding:10px;flex:1;min-width:80px;text-align:center"><div style="font-size:18px;font-weight:700">'+p.level+'</div><div style="font-size:9px;color:var(--tx2)">⭐ Ур.</div></div><div style="background:var(--sf2);border-radius:8px;padding:10px;flex:1;min-width:80px;text-align:center"><div style="font-size:18px;font-weight:700">'+(p.trophies||0)+'</div><div style="font-size:9px;color:var(--tx2)">🏆 Троф.</div></div><div style="background:var(--sf2);border-radius:8px;padding:10px;flex:1;min-width:80px;text-align:center"><div style="font-size:18px;font-weight:700">'+p.unique_cards+'</div><div style="font-size:9px;color:var(--tx2)">🃏 Карт</div></div><div style="background:var(--sf2);border-radius:8px;padding:10px;flex:1;min-width:80px;text-align:center"><div style="font-size:18px;font-weight:700">'+(p.battles_won||0)+'</div><div style="font-size:9px;color:var(--tx2)">⚔️ Побед</div></div><div style="background:var(--sf2);border-radius:8px;padding:10px;flex:1;min-width:80px;text-align:center"><div style="font-size:18px;font-weight:700">'+p.boxes_opened+'</div><div style="font-size:9px;color:var(--tx2)">🎁 Ящиков</div></div></div><div style="display:flex;justify-content:center;gap:8px;margin-top:6px;flex-wrap:wrap"><div style="background:linear-gradient(135deg,rgba(124,58,237,.12),rgba(124,58,237,.04));border-radius:8px;padding:6px 12px;text-align:center;border:1px solid rgba(124,58,237,.15)"><div style="font-size:14px;font-weight:700;color:var(--p2)">'+ar+'</div><div style="font-size:9px;color:var(--tx2)">⚔️ Рейтинг</div></div><div style="background:linear-gradient(135deg,rgba(251,191,36,.12),rgba(251,191,36,.04));border-radius:8px;padding:6px 12px;text-align:center;border:1px solid rgba(251,191,36,.15)"><div style="font-size:14px;font-weight:700;color:var(--gd)">'+lr+'</div><div style="font-size:9px;color:var(--tx2)">🧩 Лудо</div></div></div>'+db+'</div>'
 }
 async function cD(){try{var r=await ap('/daily-claim/'+uid,{method:'POST'});T(r.message,'s');_pR();rP()}catch(e){T(e.message,'e');_pE()}}
@@ -304,213 +304,19 @@ async function iC(id){
 }
 async function eC(id){try{var r=await ap('/set-main-card/'+uid+'/'+id,{method:'POST'});T(r.message,'s');qa('.md').forEach(function(m){m.remove()});await fP();rC();if(q('.tb-b[data-p="p1"].on'))rP()}catch(e){T(e.message,'e')}}
 
-var ludoActive=false, ludoRating=0;
-async function rLudo(){
+function rW(){
   try{
-    var hs=parseInt(localStorage.getItem('ludo_highscore')||'0');
-    if(ludoActive){
-      if($('ludoContainer')&&typeof LUDO!=='undefined'&&LUDO.canvas)return;
-      if(typeof LUDO!=='undefined'&&LUDO.container)LUDO.destroy();
-      startLudo();
-      return
-    }
-    var d;try{d=await ap('/ludo-data/'+uid);ludoRating=(d&&d.rating)||0;if(d&&d.multiplier)window._ludoMult=d.multiplier}catch(e){}
-    ludoRating=ludoRating||0;
-    var mb=window._ludoMult||1;
-    var mbHtml=mb>1?'<div style="font-size:11px;color:var(--tx2);margin-bottom:6px">⭐ Множитель: <b style="color:var(--gd)">x'+mb+'</b> <span style="color:var(--tx2);font-size:10px">(карты + коллекция)</span></div>':'';
-    $('p4').innerHTML='<div class=sf style=text-align:center><div style="font-size:48px;margin-bottom:4px">🎲</div><div style="font-size:18px;font-weight:700;margin-bottom:2px">Лудо Король</div><div style="font-size:12px;color:var(--tx2);margin-bottom:8px">Классическая настольная игра для 1-4 игроков</div>'+(hs>0?'<div style="font-size:13px;color:var(--gd);margin-bottom:8px">🏆 Рекорд: <b>'+hs+'</b></div>':'')+mbHtml+'<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="b b-g" onclick="startLudo()" style="flex:1;min-width:120px">🎲 Одиночная</button><button class="b b-p" onclick="startLudoOnline()" style="flex:1;min-width:120px">🌐 С друзьями</button></div></div>'
-  }catch(e){var el=$('p4');if(el)el.innerHTML='<div class=sf style="text-align:center;padding:32px"><div style="font-size:36px">⚠️</div><div style="color:var(--rd);margin:8px 0">Ошибка загрузки</div><button class="b b-g" onclick="startLudo()">▶ Играть</button></div>'}
-}
-var _ludoColor=0;
-function pickLudoColor(ci){
-  _ludoColor=ci;
-  qa('.ludo-cp').forEach(function(b){b.style.border='3px solid transparent';});
-  var el=q('.ludo-cp[data-c="'+ci+'"]');
-  if(el)el.style.border='3px solid #fff';
-}
-function startLudo(){
-  ludoActive=true;
-  var cb=window._ludoMult||1;
-  var colors=[
-    {n:'Красный',c:'#ef4444',e:'🔴'},
-    {n:'Зелёный',c:'#22c55e',e:'🟢'},
-    {n:'Синий',c:'#3b82f6',e:'🔵'},
-    {n:'Жёлтый',c:'#eab308',e:'🟡'}
-  ];
-  var html='<div style="text-align:center;padding:16px">'+
-    '<div style="font-size:36px;margin-bottom:4px">🎲</div>'+
-    '<div style="font-size:18px;font-weight:700;margin-bottom:2px">Лудо Король</div>'+
-    '<div style="font-size:12px;color:var(--tx2);margin-bottom:12px">Выбери цвет фишек</div>'+
-    '<div style="display:flex;gap:8px;justify-content:center;margin-bottom:14px">';
-  for(var ci=0;ci<4;ci++){
-    html+='<div class=ludo-cp data-c="'+ci+'" onclick="pickLudoColor('+ci+')" style="width:56px;height:56px;border-radius:50%;background:'+colors[ci].c+';display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;border:3px solid '+(ci===0?'#fff':'transparent')+';box-shadow:0 4px 20px rgba(0,0,0,.3);transition:all .2s">'+colors[ci].e+'</div>';
-  }
-  html+='</div>'+
-    '<button class="b b-g" onclick="startLudoGame()" style="min-width:140px">🎲 Играть</button>'+
-    '</div>';
-  $('p4').innerHTML=html;
-}
-function startLudoGame(){
-  var cb=window._ludoMult||1;
-  $('p4').innerHTML='<div id=ludoContainer></div>';
-  setTimeout(function(){
-    try{
-      var c=$('ludoContainer');
-      if(!c)return;
-      if(typeof LUDO==='undefined'){c.innerHTML='<div class=sf style="text-align:center;padding:32px;color:var(--rd)"><span>⚠️ Скрипт игры не загружен</span><br><button class="b b-g b-sm" onclick="startLudo()" style="margin-top:8px">🔄 Повторить</button></div>';return}
-      if(typeof LUDO.destroy==='function')LUDO.destroy();
-      LUDO.init(c, function(winner, score){
-        var hs=parseInt(localStorage.getItem('ludo_highscore')||'0');
-        if(score>hs)localStorage.setItem('ludo_highscore',score);
-        ludoActive=false;
-        (async function(){
-          try{
-            var r=await ap('/submit-ludo-score/'+uid,{method:'POST',body:JSON.stringify({score:Math.round(score),winner:winner})});
-            if(r.new_milestones&&r.new_milestones.length){
-              var txt='';
-              for(var nmi=0;nmi<r.new_milestones.length;nmi++){var nm=r.new_milestones[nmi];txt+='🎯 '+nm.threshold.toLocaleString()+' → 🎁 '+nm.reward+' ящиков\n'}
-              T(txt,'s');
-            }
-          }catch(e){}
-          rLudo();
-        })();
-      }, ludoRating||0, cb, false, false, null, null, _ludoColor);
-    }catch(e){
-      var el=$('ludoContainer')||$('p4');
-      if(el)el.innerHTML='<div class=sf style="text-align:center;padding:32px"><div style="font-size:36px">⚠️</div><div style="color:var(--rd);margin:8px 0">Ошибка: '+(e.message||'неизвестная')+'</div><button class="b b-g b-sm" onclick="startLudo()" style="margin-top:8px">🔄 Повторить</button></div>';
-    }
-  },100);
-}
-var _ludoOnlineWS = null, _ludoRoomId = null;
-
-function startLudoOnline(){
-  ludoActive=true;
-  var cb=window._ludoMult||1;
-  $('p4').innerHTML='<div id=ludoContainer style="display:flex;flex-direction:column;align-items:center;padding:16px">'+
-    '<div style="font-size:36px;margin-bottom:8px">🎲</div>'+
-    '<div style="font-size:16px;font-weight:700;margin-bottom:4px">Лудо онлайн</div>'+
-    '<div style="font-size:12px;color:var(--tx2);margin-bottom:12px">Создай комнату или присоединись по ID</div>'+
-    '<input id=ludoRoomInput placeholder="ID комнаты" style="width:180px;padding:8px;text-align:center;font-size:16px;letter-spacing:2px;background:var(--sf2);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:var(--tx);outline:none;margin-bottom:10px;text-transform:uppercase">'+
-    '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">'+
-      '<button class="b b-g" onclick="createLudoRoom()" style="min-width:130px">➕ Создать</button>'+
-      '<button class="b b-p" onclick="joinLudoRoom()" style="min-width:130px">🔑 Присоединиться</button>'+
-    '</div>'+
-    '<div id=ludoRoomStatus style="margin-top:10px;font-size:12px;color:var(--tx2);text-align:center"></div>'+
-  '</div>';
-}
-
-function createLudoRoom(){
-  var status=$('ludoRoomStatus');
-  if(!status)return;
-  status.innerHTML='⏳ Создание комнаты...';
-  var protocol=window.location.protocol==='https:'?'wss:':'ws:';
-  var url=protocol+'//'+window.location.host+'/ws/ludo/new/'+uid;
-  try{
-    _ludoOnlineWS=new WebSocket(url);
-    _ludoOnlineWS.onmessage=function(e){
-      var msg=JSON.parse(e.data);
-      if(msg.type==='room_created'){
-        _ludoRoomId=msg.room_id;
-        status.innerHTML='<div style="font-size:14px;color:var(--gd);margin-bottom:4px">✅ Комната создана!</div>'+
-          '<div style="font-size:22px;font-weight:700;letter-spacing:4px;color:var(--p2);margin:4px 0">'+msg.room_id+'</div>'+
-          '<div style="font-size:11px;color:var(--tx2);margin-bottom:6px">Отправь этот ID другу</div>'+
-          '<button class="b b-sm" onclick="copyLudoRoomId(\''+msg.room_id+'\')" style="margin-bottom:6px">📋 Копировать</button>'+
-          '<div style="font-size:11px;color:var(--tx2)">⏳ Ожидание соперника...</div>';
-      }else if(msg.type==='room_ready'){
-        _startLudoOnlineGame(msg);
-      }else if(msg.type==='error'){
-        status.innerHTML='<span style="color:var(--rd)">⚠️ '+msg.message+'</span>';
-      }
-    };
-    _ludoOnlineWS.onclose=function(){
-      if(!document.querySelector('#ludoCanvas')) status.innerHTML='<span style="color:var(--rd)">⚠️ Соединение потеряно</span>';
-    };
-    _ludoOnlineWS.onerror=function(){
-      status.innerHTML='<span style="color:var(--rd)">⚠️ Ошибка соединения</span>';
-    };
-    // Keepalive ping every 20s to prevent proxy timeout
-    _ludoOnlineWS._ka=setInterval(function(){
-      if(_ludoOnlineWS&&_ludoOnlineWS.readyState===WebSocket.OPEN)_ludoOnlineWS.send(JSON.stringify({type:'ping'}));
-    },20000);
+    if(typeof GDWave==='undefined'){$('p4').innerHTML='<div class=sf style=text-align:center;padding:32px><div style=font-size:48px>🌊</div><div style=color:var(--tx2);margin-top:8px>Игра не загружена</div></div>';return}
+    if(typeof GDWave.destroy==='function')GDWave.destroy();
+    $('p4').innerHTML='<div id=gdwRoot></div>';
+    setTimeout(function(){
+      var c=$('gdwRoot');
+      if(c)GDWave.init(c, function(score,data){});
+    },50);
   }catch(e){
-    status.innerHTML='<span style="color:var(--rd)">⚠️ Ошибка: '+e.message+'</span>';
+    var el=$('p4');
+    if(el)el.innerHTML='<div class=sf style=text-align:center;padding:32px><div style=font-size:36px>⚠️</div><div style=color:var(--rd);margin:8px 0>'+e.message+'</div><button class="b b-g" onclick="rW()">🔄</button></div>';
   }
-}
-
-function joinLudoRoom(){
-  var input=$('ludoRoomInput');
-  var status=$('ludoRoomStatus');
-  if(!input||!status)return;
-  var roomId=input.value.trim().toUpperCase();
-  if(!roomId||roomId.length<4){status.innerHTML='<span style="color:var(--rd)">⚠️ Введи ID комнаты</span>';return}
-  _ludoRoomId=roomId;
-  status.innerHTML='⏳ Подключение...';
-  var protocol=window.location.protocol==='https:'?'wss:':'ws:';
-  var url=protocol+'//'+window.location.host+'/ws/ludo/'+roomId+'/'+uid;
-  try{
-    _ludoOnlineWS=new WebSocket(url);
-    _ludoOnlineWS.onmessage=function(e){
-      var msg=JSON.parse(e.data);
-      if(msg.type==='room_ready'){
-        _startLudoOnlineGame(msg);
-      }else if(msg.type==='error'){
-        status.innerHTML='<span style="color:var(--rd)">⚠️ '+msg.message+'</span>';
-      }
-    };
-    _ludoOnlineWS.onclose=function(){
-      if(!document.querySelector('#ludoCanvas')) status.innerHTML='<span style="color:var(--rd)">⚠️ Соединение потеряно</span>';
-    };
-    _ludoOnlineWS.onerror=function(){
-      status.innerHTML='<span style="color:var(--rd)">⚠️ Ошибка соединения</span>';
-    };
-    _ludoOnlineWS._ka=setInterval(function(){
-      if(_ludoOnlineWS&&_ludoOnlineWS.readyState===WebSocket.OPEN)_ludoOnlineWS.send(JSON.stringify({type:'ping'}));
-    },20000);
-  }catch(e){
-    status.innerHTML='<span style="color:var(--rd)">⚠️ Ошибка: '+e.message+'</span>';
-  }
-}
-
-function copyLudoRoomId(id){
-  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(id);
-  T('ID скопирован: '+id,'s');
-}
-
-function _startLudoOnlineGame(msg){
-  var cb=window._ludoMult||1;
-  var roomId=_ludoRoomId||'';
-  var pi=msg.index||0;
-  var existingWs=_ludoOnlineWS;
-  _ludoOnlineWS=null;
-  // Clear keepalive + suppress old onclose to prevent false "connection lost"
-  if(existingWs){if(existingWs._ka)clearInterval(existingWs._ka);existingWs.onclose=null;existingWs.onerror=null;}
-  $('p4').innerHTML='<div id=ludoContainer></div>';
-  setTimeout(function(){
-    try{
-      var c=$('ludoContainer');
-      if(!c)return;
-      if(typeof LUDO.destroy==='function')LUDO.destroy();
-      LUDO.init(c, function(winner, score){
-        var hs=parseInt(localStorage.getItem('ludo_highscore')||'0');
-        if(score>hs)localStorage.setItem('ludo_highscore',score);
-        ludoActive=false;
-        (async function(){
-          try{
-            var r=await ap('/submit-ludo-score/'+uid,{method:'POST',body:JSON.stringify({score:Math.round(score),winner:winner})});
-            if(r.new_milestones&&r.new_milestones.length){
-              var txt='';
-              for(var nmi=0;nmi<r.new_milestones.length;nmi++){var nm=r.new_milestones[nmi];txt+='🎯 '+nm.threshold.toLocaleString()+' → 🎁 '+nm.reward+' ящиков\n'}
-              T(txt,'s');
-            }
-          }catch(e){}
-          rLudo();
-        })();
-      }, ludoRating||0, cb, true, roomId, existingWs, pi);
-    }catch(e){
-      var el=$('ludoContainer')||$('p4');
-      if(el)el.innerHTML='<div class=sf style="text-align:center;padding:32px"><div style="font-size:36px">⚠️</div><div style="color:var(--rd);margin:8px 0">Ошибка: '+(e.message||'неизвестная')+'</div><button class="b b-g b-sm" onclick="startLudo()" style="margin-top:8px">🔄 Повторить</button></div>';
-    }
-  },100);
 }
 
 async function rA(){
@@ -591,6 +397,6 @@ async function chkBan(){
 if(!uid){$('ld').innerHTML='<div class=sf style="text-align:center;padding:48px 16px"><div style="font-size:64px;margin-bottom:12px">⚔️</div><h2 style="margin-bottom:4px">Gacha Battle</h2><p style="color:var(--tx2)">Запусти бота в Telegram!</p></div>'}
 else{var _lt=setTimeout(function(){try{$('ld').innerHTML='<div class=sf style="text-align:center;padding:48px"><div style="font-size:48px">⏱</div><div style="color:var(--tx2);margin:8px 0">Долгая загрузка...</div><button class="b b-g" onclick="location.reload()">🔄 Повторить</button></div>'}catch(e){}},8000);fP().then(function(){clearTimeout(_lt);if(ud.is_banned){$('ld').style.display='none';showBanScreen();return}sp('p1');$('ld').style.display='none'}).catch(function(e){clearTimeout(_lt);$('ld').innerHTML='<div class=sf style="text-align:center;padding:48px"><p style="color:var(--rd)">❌ '+e.message+'</p><button class="b b-g" style="margin-top:8px" onclick="location.reload()">🔄 Повторить</button></div>'})}
 </script>
-<script src=/static/ludo.js?v=2></script>
+<script src=/static/gdwave.js?v=1></script>
 </body>
 </html>

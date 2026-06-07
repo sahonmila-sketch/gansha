@@ -8,7 +8,6 @@ from typing import Optional
 from config import DB_PATH, DATABASE_URL, RARITIES, DAILY_BONUS, BOX_PRICE, INITIAL_BALANCE, REFERRAL_BONUS, ADMIN_IDS
 from config import BATTLES_PER_DAY, BATTLE_WIN_BOXES, BATTLE_WIN_TROPHIES, BATTLE_LOSE_COINS, BATTLE_LOSE_TROPHIES, BATTLE_EXTRA_COST, BATTLE_MAX_ROUNDS
 from config import EQUIP_SLOTS, ENEMY_RARITY_WEIGHTS, MISSIONS_PER_DAY, MISSION_TYPES, LEVEL_THRESHOLDS
-from config import LUDO_MILESTONES
 from characters import CHARACTERS, CARD_STATS_BASE, CARD_STATS_PER_LEVEL, RARITY_SPECIALS
 
 
@@ -112,10 +111,6 @@ class Database:
             conn = await asyncpg.connect(DATABASE_URL)
             self.db = _PGConnection(conn)
             await self._create_tables_pg()
-            try:
-                await self.db.execute("ALTER TABLE users ADD COLUMN ludo_rating INTEGER DEFAULT 0")
-            except Exception:
-                pass
             try:
                 await self.db.execute("ALTER TABLE users ADD COLUMN arena_rating INTEGER DEFAULT 0")
             except Exception:
@@ -274,15 +269,6 @@ class Database:
             );
             CREATE INDEX IF NOT EXISTS idx_arena_players_arena ON arena_players(arena_id);
             CREATE INDEX IF NOT EXISTS idx_arena_players_tg ON arena_players(telegram_id);
-            CREATE TABLE IF NOT EXISTS ludo_milestones (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER NOT NULL REFERENCES users(id),
-                milestone INTEGER NOT NULL,
-                claimed INTEGER DEFAULT 0,
-                claimed_at TIMESTAMP,
-                UNIQUE(user_id, milestone)
-            );
-            CREATE INDEX IF NOT EXISTS idx_ludo_milestones_user ON ludo_milestones(user_id);
         """)
 
     async def _create_tables(self):
@@ -418,16 +404,6 @@ class Database:
             );
             CREATE INDEX IF NOT EXISTS idx_arena_players_arena ON arena_players(arena_id);
             CREATE INDEX IF NOT EXISTS idx_arena_players_tg ON arena_players(telegram_id);
-            CREATE TABLE IF NOT EXISTS ludo_milestones (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                milestone INTEGER NOT NULL,
-                claimed INTEGER DEFAULT 0,
-                claimed_at TEXT,
-                UNIQUE(user_id, milestone),
-                FOREIGN KEY(user_id) REFERENCES users(id)
-            );
-            CREATE INDEX IF NOT EXISTS idx_ludo_milestones_user ON ludo_milestones(user_id);
         """)
 
     async def _migrate(self):
@@ -449,10 +425,6 @@ class Database:
                 await self.db.execute(f"ALTER TABLE users ADD COLUMN {name} {dtype}")
             except aiosqlite.OperationalError:
                 pass
-        try:
-            await self.db.execute("ALTER TABLE users ADD COLUMN ludo_rating INTEGER DEFAULT 0")
-        except aiosqlite.OperationalError:
-            pass
         try:
             await self.db.execute("ALTER TABLE users ADD COLUMN arena_rating INTEGER DEFAULT 0")
         except aiosqlite.OperationalError:
@@ -558,7 +530,7 @@ class Database:
         return {**card, "level": level, **stats}
 
     def _norm_user(self, user: dict) -> dict:
-        for field in ['balance', 'boxes_opened', 'free_boxes', 'trophies', 'battles_won', 'battles_total', 'level', 'ludo_rating', 'arena_rating', 'is_admin', 'is_banned']:
+        for field in ['balance', 'boxes_opened', 'free_boxes', 'trophies', 'battles_won', 'battles_total', 'level', 'arena_rating', 'is_admin', 'is_banned']:
             val = user.get(field)
             user[field] = int(val) if val is not None else 0
         return user
@@ -1396,139 +1368,6 @@ class Database:
             "progress_pct": round(progress, 1),
             "next_at": next_threshold,
         }
-
-    # ── Ludo Rating ──
-
-    async def get_ludo_data(self, telegram_id: int):
-        user = await self.get_user(telegram_id)
-        if not user:
-            return None
-        rating = user.get("ludo_rating", 0)
-        cursor = await self.db.execute(
-            "SELECT milestone FROM ludo_milestones WHERE user_id = ? AND claimed = 0",
-            (user["id"],)
-        )
-        rows = await cursor.fetchall()
-        unclaimed = [r["milestone"] for r in rows] if rows else []
-
-        milestones = []
-        for threshold, boxes in LUDO_MILESTONES:
-            cursor = await self.db.execute(
-                "SELECT claimed FROM ludo_milestones WHERE user_id = ? AND milestone = ?",
-                (user["id"], threshold)
-            )
-            row = await cursor.fetchone()
-            is_claimed = row is not None and row["claimed"] == 1
-            milestones.append({
-                "threshold": threshold,
-                "reward": boxes,
-                "claimed": is_claimed,
-                "reached": rating >= threshold,
-            })
-
-        next_m = None
-        for m in milestones:
-            if not m["reached"]:
-                next_m = m
-                break
-
-        # Compute multiplier: main card bonus + collection bonus
-        rarity_mult = {"common": 1.0, "rare": 1.1, "epic": 1.25, "legendary": 1.5}
-        main_bonus = 1.0
-        if user.get("main_card_id"):
-            mc = await self.get_main_card(telegram_id)
-            if mc:
-                main_bonus = rarity_mult.get(mc.get("rarity", "common"), 1.0)
-        col_mult = {"common": 0.01, "rare": 0.02, "epic": 0.03, "legendary": 0.05}
-        cursor = await self.db.execute(
-            "SELECT card_id, count FROM user_cards WHERE user_id = ?",
-            (user["id"],)
-        )
-        owned = await cursor.fetchall()
-        col_bonus = 0.0
-        for row in owned:
-            cid = row["card_id"]
-            card = next((c for c in CHARACTERS if c["id"] == cid), None)
-            if card:
-                col_bonus += col_mult.get(card["rarity"], 0)
-        multiplier = round(main_bonus + col_bonus, 2)
-
-        return {
-            "rating": rating,
-            "unclaimed": unclaimed,
-            "milestones": milestones,
-            "next_milestone": next_m,
-            "multiplier": multiplier,
-        }
-
-    async def submit_ludo_score(self, telegram_id: int, score: int):
-        user = await self.get_user(telegram_id)
-        if not user:
-            return None, "Пользователь не найден"
-
-        await self.db.execute(
-            "UPDATE users SET ludo_rating = COALESCE(ludo_rating, 0) + ? WHERE telegram_id = ?",
-            (score, telegram_id)
-        )
-        await self.db.commit()
-
-        user = await self.get_user(telegram_id)
-        new_rating = user.get("ludo_rating", 0)
-
-        new_milestones = []
-        for threshold, boxes in LUDO_MILESTONES:
-            if new_rating >= threshold:
-                cursor = await self.db.execute(
-                    "SELECT id FROM ludo_milestones WHERE user_id = ? AND milestone = ?",
-                    (user["id"], threshold)
-                )
-                existing = await cursor.fetchone()
-                if not existing:
-                    if self._is_pg:
-                        await self.db.execute(
-                            "INSERT INTO ludo_milestones (user_id, milestone) VALUES ($1, $2)",
-                            (user["id"], threshold)
-                        )
-                    else:
-                        await self.db.execute(
-                            "INSERT INTO ludo_milestones (user_id, milestone) VALUES (?, ?)",
-                            (user["id"], threshold)
-                        )
-                    new_milestones.append({"threshold": threshold, "reward": boxes})
-                    await self.db.commit()
-
-        return {"rating": new_rating, "new_milestones": new_milestones}, None
-
-    async def claim_ludo_milestone(self, telegram_id: int, threshold: int):
-        user = await self.get_user(telegram_id)
-        if not user:
-            return None, "Пользователь не найден"
-
-        cursor = await self.db.execute(
-            "SELECT id FROM ludo_milestones WHERE user_id = ? AND milestone = ? AND claimed = 0",
-            (user["id"], threshold)
-        )
-        row = await cursor.fetchone()
-        if not row:
-            return None, "Награда уже получена или не достигнута"
-
-        boxes = 0
-        for t, b in LUDO_MILESTONES:
-            if t == threshold:
-                boxes = b
-                break
-
-        await self.db.execute(
-            "UPDATE ludo_milestones SET claimed = 1 WHERE id = ?",
-            (row["id"],)
-        )
-        await self.db.execute(
-            "UPDATE users SET free_boxes = free_boxes + ? WHERE telegram_id = ?",
-            (boxes, telegram_id)
-        )
-        await self.db.commit()
-
-        return {"reward": f"{boxes} ящиков", "boxes_added": boxes}, None
 
     # ── Admin / Ban ──
 
