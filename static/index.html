@@ -321,8 +321,36 @@ async function rLudo(){
     $('p4').innerHTML='<div class=sf style=text-align:center><div style="font-size:48px;margin-bottom:4px">🎲</div><div style="font-size:18px;font-weight:700;margin-bottom:2px">Лудо Король</div><div style="font-size:12px;color:var(--tx2);margin-bottom:8px">Классическая настольная игра для 1-4 игроков</div>'+(hs>0?'<div style="font-size:13px;color:var(--gd);margin-bottom:8px">🏆 Рекорд: <b>'+hs+'</b></div>':'')+mbHtml+'<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="b b-g" onclick="startLudo()" style="flex:1;min-width:120px">🎲 Одиночная</button><button class="b b-p" onclick="startLudoOnline()" style="flex:1;min-width:120px">🌐 С друзьями</button></div></div>'
   }catch(e){var el=$('p4');if(el)el.innerHTML='<div class=sf style="text-align:center;padding:32px"><div style="font-size:36px">⚠️</div><div style="color:var(--rd);margin:8px 0">Ошибка загрузки</div><button class="b b-g" onclick="startLudo()">▶ Играть</button></div>'}
 }
+var _ludoColor=0;
+function pickLudoColor(ci){
+  _ludoColor=ci;
+  qa('.ludo-cp').forEach(function(b){b.style.border='3px solid transparent';});
+  var el=q('.ludo-cp[data-c="'+ci+'"]');
+  if(el)el.style.border='3px solid #fff';
+}
 function startLudo(){
   ludoActive=true;
+  var cb=window._ludoMult||1;
+  var colors=[
+    {n:'Красный',c:'#ef4444',e:'🔴'},
+    {n:'Зелёный',c:'#22c55e',e:'🟢'},
+    {n:'Синий',c:'#3b82f6',e:'🔵'},
+    {n:'Жёлтый',c:'#eab308',e:'🟡'}
+  ];
+  var html='<div style="text-align:center;padding:16px">'+
+    '<div style="font-size:36px;margin-bottom:4px">🎲</div>'+
+    '<div style="font-size:18px;font-weight:700;margin-bottom:2px">Лудо Король</div>'+
+    '<div style="font-size:12px;color:var(--tx2);margin-bottom:12px">Выбери цвет фишек</div>'+
+    '<div style="display:flex;gap:8px;justify-content:center;margin-bottom:14px">';
+  for(var ci=0;ci<4;ci++){
+    html+='<div class=ludo-cp data-c="'+ci+'" onclick="pickLudoColor('+ci+')" style="width:56px;height:56px;border-radius:50%;background:'+colors[ci].c+';display:flex;align-items:center;justify-content:center;font-size:24px;cursor:pointer;border:3px solid '+(ci===0?'#fff':'transparent')+';box-shadow:0 4px 20px rgba(0,0,0,.3);transition:all .2s">'+colors[ci].e+'</div>';
+  }
+  html+='</div>'+
+    '<button class="b b-g" onclick="startLudoGame()" style="min-width:140px">🎲 Играть</button>'+
+    '</div>';
+  $('p4').innerHTML=html;
+}
+function startLudoGame(){
   var cb=window._ludoMult||1;
   $('p4').innerHTML='<div id=ludoContainer></div>';
   setTimeout(function(){
@@ -346,7 +374,7 @@ function startLudo(){
           }catch(e){}
           rLudo();
         })();
-      }, ludoRating||0, cb, false);
+      }, ludoRating||0, cb, false, false, null, null, _ludoColor);
     }catch(e){
       var el=$('ludoContainer')||$('p4');
       if(el)el.innerHTML='<div class=sf style="text-align:center;padding:32px"><div style="font-size:36px">⚠️</div><div style="color:var(--rd);margin:8px 0">Ошибка: '+(e.message||'неизвестная')+'</div><button class="b b-g b-sm" onclick="startLudo()" style="margin-top:8px">🔄 Повторить</button></div>';
